@@ -43,7 +43,7 @@ app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
 
     // Default admin from ENV (for first time)
-    if (username === 'admin' && (password === process.env.ADMIN_PASSWORD || await bcrypt.compare(password, await bcrypt.hash(process.env.ADMIN_PASSWORD, 10)))) {
+    if (username === 'admin' && password === process.env.ADMIN_PASSWORD) {
         return res.json({ success: true, role: 'admin' });
     }
 
