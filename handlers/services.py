@@ -7,7 +7,7 @@ from keyboards import get_services_keyboard
 
 router = Router()
 
-@router.message(F.text == "🛠 Xizmatlar")
+@router.message(F.text == "💻 Xizmatlar")
 async def show_services(message: Message):
     services = await get_all_services()
     

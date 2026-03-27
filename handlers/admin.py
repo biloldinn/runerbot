@@ -155,3 +155,20 @@ async def cancel_payment(callback: CallbackQuery, bot: Bot):
         await bot.send_message(order['user_id'], f"❌ **To'lovingiz bekor qilindi.**")
     except: pass
     await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n❌ **BEKOR QILINDI**", reply_markup=None)
+
+@router.callback_query(F.data == "admin_orders")
+async def admin_orders_list(callback: CallbackQuery):
+    from database import get_all_orders
+    orders = await get_all_orders()
+    
+    if not orders:
+        await callback.answer("Hozircha buyurtmalar yo'q.")
+        return
+        
+    text = "📦 **Barcha buyurtmalar ro'yxati:**\n\n"
+    for o in orders[:10]: # Oxirgi 10 tasini ko'rsatamiz
+        status = "⏳" if o['status'] == 'new' else "✅" if o['status'] == 'completed' else "🔧"
+        text += f"{status} #{o['order_number']} | {o['total_price']:,} so'm | {o['user_name']}\n"
+        
+    await callback.message.answer(text, parse_mode="Markdown")
+    await callback.answer()

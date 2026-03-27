@@ -85,6 +85,12 @@ async def payment_receipt(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(text, parse_mode="Markdown")
     await callback.answer()
 
+@router.callback_query(F.data == "cancel_order")
+async def cancel_order(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await callback.message.edit_text("❌ Buyurtma bekor qilindi.")
+    await callback.answer()
+
 @router.message(OrderState.waiting_for_receipt, F.photo)
 async def get_receipt(message: Message, state: FSMContext, bot: Bot):
     data = await state.get_data()
@@ -219,3 +225,26 @@ async def my_order_detail(callback: CallbackQuery):
     keyboard = get_order_detail_keyboard(order)
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
     await callback.answer()
+
+@router.callback_query(F.data == "back_to_orders")
+async def back_to_orders(callback: CallbackQuery):
+    user = await get_user_by_telegram_id(callback.from_user.id)
+    orders = await get_orders_by_user(user['telegram_id'])
+    
+    if not orders:
+        await callback.message.edit_text("❌ Sizning buyurtmalaringiz yo‘q.")
+        await callback.answer()
+        return
+    
+    keyboard = get_orders_keyboard(orders)
+    await callback.message.edit_text(
+        "📋 **Sizning buyurtmalaringiz:**",
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("rate_"))
+async def rate_order(callback: CallbackQuery):
+    await callback.answer("⭐ Raxmat! Bahoingiz qabul qilindi.", show_alert=True)
+    await callback.message.edit_reply_markup(reply_markup=None)

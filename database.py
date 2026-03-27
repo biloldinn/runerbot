@@ -58,6 +58,10 @@ async def get_or_create_user(telegram_id, username=None, full_name=None):
         user = await db.users.find_one({"telegram_id": telegram_id})
     return user
 
+async def get_all_users():
+    return await db.users.find({}).to_list(length=None)
+
+
 async def update_user_phone(telegram_id, phone):
     await db.users.update_one(
         {"telegram_id": telegram_id},

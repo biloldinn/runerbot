@@ -12,10 +12,32 @@ from aiogram.types import BotCommand
 from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN, ADMIN_IDS
-from database import init_db
+from database import init_db, get_all_users
 from handlers import start, services, orders, worker, admin
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO)
+
+async def send_daily_notification(bot: Bot):
+    # Bugun haftaning qaysi kuni? (0-Dushanba, 6-Yakshanba)
+    if datetime.now().weekday() == 6:
+        return # Yakshanba kuni yubormaslik
+        
+    users = await get_all_users()
+    text = (
+        "☀️ **Assalomu alaykum!**\n\n"
+        "🏢 Turon kompyuter xizmatlari o'z ishini boshladi!\n"
+        "Bugun soat 18:00 ga qadar xizmatingizdamiz.\n\n"
+        "💻 Xizmatlarimizdan foydalanish uchun /start bosing."
+    )
+    
+    for user in users:
+        try:
+            await bot.send_message(user['telegram_id'], text, parse_mode="Markdown")
+            await asyncio.sleep(0.05) # Telegram limitlaridan oshib ketmaslik uchun
+        except Exception:
+            continue
 
 async def set_commands(bot: Bot):
     commands = [
@@ -42,6 +64,11 @@ async def main():
     dp.include_router(worker.router)
     dp.include_router(admin.router)
     
+    # Setup scheduler
+    scheduler = AsyncIOScheduler(timezone='Asia/Tashkent')
+    scheduler.add_job(send_daily_notification, 'cron', hour=8, minute=0, args=[bot])
+    scheduler.start()
+
     # Set commands
     await set_commands(bot)
     
