@@ -30,6 +30,7 @@ def get_services_keyboard(services):
             text=f"{service['name']} - {service['price']:,} so‘m",
             callback_data=f"service_{service['id']}"
         )])
+    buttons.append([InlineKeyboardButton(text="🆕 Boshqa xizmat...", callback_data="service_other")])
     buttons.append([InlineKeyboardButton(text="🏠 Bosh menyu", callback_data="main_menu")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

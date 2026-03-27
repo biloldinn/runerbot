@@ -31,18 +31,48 @@ async def admin_main(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🌐 Web Hisobotlar", web_app=WebAppInfo(url=WEBAPP_URL))] if WEBAPP_URL else [],
         [InlineKeyboardButton(text="👤 Xodim qo'shish", callback_data="add_worker_bot")],
+        [InlineKeyboardButton(text="👥 Xodimlar ro'yxati", callback_data="admin_workers_list")],
         [InlineKeyboardButton(text="🛠 Xizmat qo'shish", callback_data="add_service_bot")],
         [InlineKeyboardButton(text="⚙️ Sozlamalar", callback_data="admin_settings")],
         [InlineKeyboardButton(text="💳 Karta sozlamalari", callback_data="admin_card_settings")],
         [InlineKeyboardButton(text="📦 Buyurtmalar", callback_data="admin_orders")],
     ])
     
-    await message.answer(
-        "👨‍💼 **Admin Boshqaruvi**\n\n"
-        "Quyidagi tugmalar orqali tizimni boshqaring:",
-        reply_markup=keyboard,
-        parse_mode="Markdown"
-    )
+    await message.answer("🔧 **Admin Panel**\n\nKerakli bo'limni tanlang:", reply_markup=keyboard, parse_mode="Markdown")
+
+@router.callback_query(F.data == "admin_workers_list")
+async def admin_workers_list(callback: CallbackQuery):
+    from database import get_all_workers
+    workers = await get_all_workers()
+    
+    if not workers:
+        await callback.answer("Hozircha xodimlar yo'q.")
+        return
+        
+    text = "👥 **Xodimlar ro'yxati:**\n\n"
+    keyboard = []
+    
+    for w in workers:
+        text += f"👤 {w['full_name']} (@{w.get('username', 'Yoq')})\n📞 {w.get('phone', 'Yoq')}\n\n"
+        keyboard.append([InlineKeyboardButton(text=f"❌ {w['full_name']} ni o'chirish", callback_data=f"delete_worker_{w['telegram_id']}")])
+    
+    keyboard.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data="admin_main_back")])
+    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="Markdown")
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("delete_worker_"))
+async def delete_worker_handler(callback: CallbackQuery):
+    from database import remove_worker
+    worker_id = int(callback.data.split("_")[2])
+    await remove_worker(worker_id)
+    await callback.answer("✅ Xodim o'chirildi!", show_alert=True)
+    await admin_workers_list(callback) # Ro'yxatni yangilash
+
+@router.callback_query(F.data == "admin_main_back")
+async def admin_main_back(callback: CallbackQuery):
+    await callback.message.delete()
+    await admin_main(callback.message)
+    await callback.answer()
 
 # --- Xodim qo'shish (FSM) ---
 @router.callback_query(F.data == "add_worker_bot")

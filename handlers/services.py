@@ -1,6 +1,7 @@
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 
 from database import get_all_services, get_service_by_id
 from keyboards import get_services_keyboard
@@ -47,6 +48,24 @@ async def service_detail(callback: CallbackQuery):
     ])
     
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+    await callback.answer()
+
+from handlers.orders import OrderState
+from keyboards import get_services_keyboard, get_payment_keyboard
+
+@router.callback_query(F.data == "service_other")
+async def service_other_handler(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(
+        service_id="other",
+        service_name="Boshqa xizmat",
+        service_price=0
+    )
+    await callback.message.edit_text(
+        "📝 **Sizga qanday xizmat kerak?**\n\n"
+        "Iltimos, muammoni yoki kerakli xizmatni batafsil yozib yuboring (yoki ovozli xabar yuboring):",
+        parse_mode="Markdown"
+    )
+    await state.set_state(OrderState.waiting_for_comment)
     await callback.answer()
 
 @router.callback_query(F.data == "back_to_services")
