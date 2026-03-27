@@ -19,6 +19,8 @@ router = Router()
 class OrderState(StatesGroup):
     waiting_for_comment = State()
     waiting_for_receipt = State()
+    waiting_for_final_amount = State()
+    waiting_for_rating = State()
 
 @router.callback_query(F.data.startswith("order_"))
 async def start_order(callback: CallbackQuery, state: FSMContext):
@@ -212,7 +214,6 @@ async def my_order_detail(callback: CallbackQuery):
     text = (
         f"📦 **Buyurtma #{order['order_number']}**\n\n"
         f"🛠 Xizmat: {order['service_name']}\n"
-        f"💰 Narxi: {order['total_price']:,} so‘m\n"
         f"📝 Izoh: {order['comment'] or 'Yo‘q'}\n\n"
         f"📊 Holat: {status_text}\n"
         f"💳 To‘lov: {payment_text}\n"
@@ -244,7 +245,37 @@ async def back_to_orders(callback: CallbackQuery):
     )
     await callback.answer()
 
+@router.message(OrderState.waiting_for_final_amount)
+async def process_final_amount(message: Message, state: FSMContext):
+    # To'langan summani saqlash 
+    text = (
+        "📈 **Rahmat! Ma'lumot qabul qilindi.**\n\n"
+        "--- ReKlaMa ---\n"
+        "🎓 **Turon o'quv markazi** — Sifatli va ishonchli ta'lim!\n"
+        "Bizni tanlaganingiz uchun tashakkur bildiramiz!\n\n"
+        "📍 Bizning kanal: @Turon_Oquv\n"
+        "--- ✨ ---\n\n"
+        "Iltimos, xizmat ko'rsatgan hodimni baholang:"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="⭐", callback_data="rate_1"),
+            InlineKeyboardButton(text="⭐⭐", callback_data="rate_2"),
+            InlineKeyboardButton(text="⭐⭐⭐", callback_data="rate_3"),
+            InlineKeyboardButton(text="⭐⭐⭐⭐", callback_data="rate_4"),
+            InlineKeyboardButton(text="⭐⭐⭐⭐⭐", callback_data="rate_5")
+        ]
+    ])
+    
+    await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+    await state.set_state(OrderState.waiting_for_rating)
+
 @router.callback_query(F.data.startswith("rate_"))
-async def rate_order(callback: CallbackQuery):
+async def rate_order(callback: CallbackQuery, state: FSMContext):
     await callback.answer("⭐ Raxmat! Bahoingiz qabul qilindi.", show_alert=True)
-    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.edit_text(
+        "✨ **Bahoingiz uchun rahmat!**\n\n"
+        "Turon o'quv markazi bilan yanada yuksaklikka! 🚀"
+    )
+    await state.clear()

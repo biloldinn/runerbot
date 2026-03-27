@@ -35,7 +35,6 @@ async def service_detail(callback: CallbackQuery):
     text = (
         f"🛠 **{service['name']}**\n\n"
         f"📝 {service['description'] or 'Tavsif mavjud emas'}\n\n"
-        f"💰 Narxi: **{service['price']:,} so‘m**\n"
         f"⏱ Vaqt: {service['duration']} daqiqa\n"
         f"📂 Kategoriya: {service['category'] or 'Umumiy'}\n\n"
         f"Buyurtma berish uchun quyidagi tugmani bosing:"

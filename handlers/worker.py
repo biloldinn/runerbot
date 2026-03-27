@@ -121,10 +121,36 @@ async def worker_complete_order(callback: CallbackQuery, bot: Bot):
     await update_order_status(order_id, "completed")
     await update_worker_stats(worker['telegram_id'], order['total_price'])
     
-    # 10 daqiqadan keyin mijozga xabar yuborish
+    # Foydalanuvchiga so'rov yuborish
+    from handlers.orders import OrderState
+    from main import bot
+    try:
+        await bot.send_message(
+            order['user_id'],
+            f"✅ **Buyurtmangiz #{order['order_number']} yakunlandi!**\n\n"
+            "Iltimos, ushbu buyurtma uchun qancha to'lov qildingiz?\n"
+            "**Aniq summani yozing:**",
+            parse_mode="Markdown"
+        )
+        # State ni o'rnatish uchun dispatcherdan foydalanishimiz kerak yoki state ni qo'lda boshqarish
+        # Lekin osonroq yo'li: stateni user_id va chat_id bo'yicha o'rnatish
+        from aiogram.fsm.storage.base import StorageKey
+        from main import dp
+        await dp.storage.set_state(
+            StorageKey(bot_id=bot.id, chat_id=order['user_id'], user_id=order['user_id']),
+            OrderState.waiting_for_final_amount
+        )
+        await dp.storage.update_data(
+            StorageKey(bot_id=bot.id, chat_id=order['user_id'], user_id=order['user_id']),
+            {"finishing_order_id": order_id, "worker_id": worker['telegram_id']}
+        )
+    except Exception as e:
+        print(f"Error sending message to user: {e}")
+
+    # 10 daqiqadan keyin mijozga xabar yuborish (eski logika o'chirildi yoki qoldirildi)
     await callback.message.answer(
         f"✅ Buyurtma #{order['order_number']} bajarildi!\n\n"
-        f"⏰ 10 daqiqadan so‘ng mijozga xabar yuboriladi.",
+        f"Mijozga to'lov summasini so'rab xabar yuborildi.",
         parse_mode="Markdown"
     )
     

@@ -48,14 +48,13 @@ async def set_commands(bot: Bot):
         commands.append(BotCommand(command="admin", description="Admin panel (Bot ichida)"))
     await bot.set_my_commands(commands)
 
+from aiogram.client.default import DefaultBotProperties
+bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+dp = Dispatcher()
+
 async def main():
     # Initialize database
     await init_db()
-    
-    # Create bot and dispatcher
-    from aiogram.client.default import DefaultBotProperties
-    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = Dispatcher()
     
     # Include routers
     dp.include_router(start.router)
