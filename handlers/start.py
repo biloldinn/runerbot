@@ -15,7 +15,7 @@ class RegisterState(StatesGroup):
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
-    user = get_or_create_user(
+    user = await get_or_create_user(
         telegram_id=message.from_user.id,
         username=message.from_user.username,
         full_name=message.from_user.full_name
@@ -58,14 +58,14 @@ async def cmd_start(message: Message, state: FSMContext):
 @router.message(RegisterState.waiting_for_phone, F.contact)
 async def get_phone(message: Message, state: FSMContext):
     phone = message.contact.phone_number
-    update_user_phone(message.from_user.id, phone)
+    await update_user_phone(message.from_user.id, phone)
     
     await message.answer(
         "✅ Telefon raqam qabul qilindi!",
         reply_markup=ReplyKeyboardRemove()
     )
     
-    user = get_user_by_telegram_id(message.from_user.id)
+    user = await get_user_by_telegram_id(message.from_user.id)
     is_admin = message.from_user.id in ADMIN_IDS
     
     if user.get('role') == 'worker':

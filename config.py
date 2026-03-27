@@ -7,7 +7,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
 ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS", "123456789").split(",")))
 
-DB_PATH = os.path.join(BASE_DIR, "turon_bot.db")
+MONGODB_URI = "mongodb+srv://bilol:bilol006@cluster0.hdolzub.mongodb.net/turon_zakas?retryWrites=true&w=majority&appName=Cluster0"
+DATABASE_NAME = "turon_zakas"
+# DB_PATH olib tashlandi, MongoDB ishlatiladi.
 
 # To'lov uchun karta raqami
 CARD_NUMBER = os.getenv("CARD_NUMBER", "8600 1234 5678 9012")

@@ -63,7 +63,7 @@ async def process_worker_name(message: Message, state: FSMContext):
 @router.message(AdminStates.waiting_worker_phone)
 async def process_worker_phone(message: Message, state: FSMContext):
     data = await state.get_data()
-    add_worker(data['worker_id'], None, data['worker_name'], message.text)
+    await add_worker(data['worker_id'], None, data['worker_name'], message.text)
     await message.answer(f"✅ Xodim qo'shildi: **{data['worker_name']}**")
     await state.clear()
 
@@ -92,7 +92,7 @@ async def process_service_price(message: Message, state: FSMContext):
 @router.message(AdminStates.waiting_service_desc)
 async def process_service_desc(message: Message, state: FSMContext):
     data = await state.get_data()
-    add_service(data['s_name'], message.text, data['s_price'], 60, "Umumiy")
+    await add_service(data['s_name'], message.text, data['s_price'], 60, "Umumiy")
     await message.answer(f"✅ Xizmat qo'shildi: **{data['s_name']}**")
     await state.clear()
 
@@ -101,10 +101,10 @@ async def process_service_desc(message: Message, state: FSMContext):
 async def check_order_receipt(message: Message, bot: Bot):
     if message.from_user.id not in ADMIN_IDS: return
     try:
-        order_id = int(message.text.split("_")[1])
+        order_id = message.text.split("_")[1]
     except: return
         
-    order = get_order_by_id(order_id)
+    order = await get_order_by_id(order_id)
     if not order or not order['receipt_url']:
         await message.answer("❌ Chek topilmadi!")
         return
@@ -119,9 +119,9 @@ async def check_order_receipt(message: Message, bot: Bot):
 
 @router.callback_query(F.data.startswith("confirm_pay_"))
 async def confirm_payment(callback: CallbackQuery, bot: Bot):
-    order_id = int(callback.data.split("_")[2])
-    order = get_order_by_id(order_id)
-    update_order_payment_status(order_id, "confirmed")
+    order_id = callback.data.split("_")[2]
+    order = await get_order_by_id(order_id)
+    await update_order_payment_status(order_id, "confirmed")
     try:
         await bot.send_message(order['user_id'], f"✅ **To'lovingiz tasdiqlandi!** #{order['order_number']}")
     except: pass
@@ -129,9 +129,9 @@ async def confirm_payment(callback: CallbackQuery, bot: Bot):
 
 @router.callback_query(F.data.startswith("cancel_pay_"))
 async def cancel_payment(callback: CallbackQuery, bot: Bot):
-    order_id = int(callback.data.split("_")[2])
-    order = get_order_by_id(order_id)
-    update_order_payment_status(order_id, "cancelled")
+    order_id = callback.data.split("_")[2]
+    order = await get_order_by_id(order_id)
+    await update_order_payment_status(order_id, "cancelled")
     try:
         await bot.send_message(order['user_id'], f"❌ **To'lovingiz bekor qilindi.**")
     except: pass

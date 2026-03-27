@@ -9,7 +9,7 @@ router = Router()
 
 @router.message(F.text == "🛠 Xizmatlar")
 async def show_services(message: Message):
-    services = get_all_services()
+    services = await get_all_services()
     
     if not services:
         await message.answer("❌ Hozircha xizmatlar mavjud emas.")
@@ -25,8 +25,8 @@ async def show_services(message: Message):
 
 @router.callback_query(F.data.startswith("service_"))
 async def service_detail(callback: CallbackQuery):
-    service_id = int(callback.data.split("_")[1])
-    service = get_service_by_id(service_id)
+    service_id = callback.data.split("_")[1]
+    service = await get_service_by_id(service_id)
     
     if not service:
         await callback.answer("Xizmat topilmadi!")
@@ -51,7 +51,7 @@ async def service_detail(callback: CallbackQuery):
 
 @router.callback_query(F.data == "back_to_services")
 async def back_to_services(callback: CallbackQuery):
-    services = get_all_services()
+    services = await get_all_services()
     keyboard = get_services_keyboard(services)
     await callback.message.edit_text(
         "📋 **Bizning xizmatlar:**\n\nKerakli xizmatni tanlang:",

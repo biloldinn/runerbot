@@ -22,8 +22,8 @@ class OrderState(StatesGroup):
 
 @router.callback_query(F.data.startswith("order_"))
 async def start_order(callback: CallbackQuery, state: FSMContext):
-    service_id = int(callback.data.split("_")[1])
-    service = get_service_by_id(service_id)
+    service_id = callback.data.split("_")[1]
+    service = await get_service_by_id(service_id)
     
     if not service:
         await callback.answer("Xizmat topilmadi!")
@@ -100,11 +100,11 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot):
     await bot.download_file(file.file_path, file_path)
     
     # Foydalanuvchini olish
-    user = get_user_by_telegram_id(message.from_user.id)
+    user = await get_user_by_telegram_id(message.from_user.id)
     
     # Buyurtma yaratish (round-robin bilan)
-    order, assigned_worker = create_order(
-        user_id=user['id'],
+    order, assigned_worker = await create_order(
+        user_id=user['telegram_id'], # Use telegram_id consistently
         service_id=service_id,
         total_price=service_price,
         payment_method="receipt",
@@ -112,7 +112,7 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot):
     )
     
     # Chekni saqlash
-    update_order_payment_status(order['id'], "pending", file_path)
+    await update_order_payment_status(order['id'], "pending", file_path)
     
     # Hodim haqida xabar
     worker_info = f"\n👨‍💻 Hodim: {assigned_worker['full_name']}" if assigned_worker else ""
@@ -166,8 +166,8 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot):
 
 @router.message(F.text == "📝 Mening buyurtmalarim")
 async def my_orders(message: Message):
-    user = get_user_by_telegram_id(message.from_user.id)
-    orders = get_orders_by_user(user['id'])
+    user = await get_user_by_telegram_id(message.from_user.id)
+    orders = await get_orders_by_user(user['telegram_id'])
     
     if not orders:
         await message.answer("❌ Sizning buyurtmalaringiz yo‘q.")
@@ -182,8 +182,8 @@ async def my_orders(message: Message):
 
 @router.callback_query(F.data.startswith("myorder_"))
 async def my_order_detail(callback: CallbackQuery):
-    order_id = int(callback.data.split("_")[1])
-    order = get_order_by_id(order_id)
+    order_id = callback.data.split("_")[1]
+    order = await get_order_by_id(order_id)
     
     if not order:
         await callback.answer("Buyurtma topilmadi!")
@@ -206,7 +206,7 @@ async def my_order_detail(callback: CallbackQuery):
     text = (
         f"📦 **Buyurtma #{order['order_number']}**\n\n"
         f"🛠 Xizmat: {order['service_name']}\n"
-        f"💰 Summa: {order['total_price']:,} so‘m\n"
+        f"💰 Narxi: {order['total_price']:,} so‘m\n"
         f"📝 Izoh: {order['comment'] or 'Yo‘q'}\n\n"
         f"📊 Holat: {status_text}\n"
         f"💳 To‘lov: {payment_text}\n"

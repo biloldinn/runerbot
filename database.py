@@ -1,459 +1,348 @@
-import sqlite3
+import motor.motor_asyncio
 from datetime import datetime, timedelta
-from contextlib import contextmanager
-from config import DB_PATH
+import asyncio
+from config import MONGODB_URI, DATABASE_NAME
 
-@contextmanager
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
+client = motor.motor_asyncio.AsyncIOMotorClient(MONGODB_URI)
+db = client[DATABASE_NAME]
 
-def init_db():
-    """Ma'lumotlar bazasini yaratish"""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        
-        # Foydalanuvchilar jadvali
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                telegram_id INTEGER UNIQUE NOT NULL,
-                username TEXT,
-                full_name TEXT,
-                phone TEXT,
-                role TEXT DEFAULT 'user',
-                is_active INTEGER DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Xizmatlar jadvali
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS services (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                description TEXT,
-                price REAL NOT NULL,
-                duration INTEGER DEFAULT 60,
-                category TEXT,
-                is_active INTEGER DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Buyurtmalar jadvali
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS orders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                order_number TEXT UNIQUE NOT NULL,
-                user_id INTEGER,
-                worker_id INTEGER,
-                service_id INTEGER,
-                status TEXT DEFAULT 'new',
-                total_price REAL,
-                payment_method TEXT,
-                payment_status TEXT DEFAULT 'pending',
-                receipt_url TEXT,
-                comment TEXT,
-                voice_note_url TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                accepted_at TIMESTAMP,
-                completed_at TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id),
-                FOREIGN KEY (worker_id) REFERENCES users(id),
-                FOREIGN KEY (service_id) REFERENCES services(id)
-            )
-        ''')
-        
-        # Hodim statistikasi jadvali
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS worker_stats (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                worker_id INTEGER,
-                date DATE,
-                orders_count INTEGER DEFAULT 0,
-                total_amount REAL DEFAULT 0,
-                UNIQUE(worker_id, date),
-                FOREIGN KEY (worker_id) REFERENCES users(id)
-            )
-        ''')
-        
-        # Admin panel foydalanuvchilari
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS admin_users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                role TEXT DEFAULT 'admin',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Default admin yaratish
-        cursor.execute("SELECT * FROM admin_users WHERE username = 'admin'")
-        if not cursor.fetchone():
-            cursor.execute('''
-                INSERT INTO admin_users (username, password, role)
-                VALUES (?, ?, ?)
-            ''', ('admin', 'admin123', 'superadmin'))
-        
-        print("Ma'lumotlar bazasi tayyor!")
+async def init_db():
+    """MongoDB indekslarini yaratish"""
+    # Unique indexes
+    await db.users.create_index("telegram_id", unique=True)
+    await db.orders.create_index("order_number", unique=True)
+    await db.admin_users.create_index("username", unique=True)
+    await db.worker_stats.create_index([("worker_id", 1), ("date", 1)], unique=True)
+    
+    # Check if default admin exists
+    admin = await db.admin_users.find_one({"username": "admin"})
+    if not admin:
+        await db.admin_users.insert_one({
+            "username": "admin",
+            "password": "admin123", # Plain text as per original code
+            "role": "superadmin",
+            "created_at": datetime.now()
+        })
+    print("MongoDB tayyor!")
 
 # ============ USER FUNKSIYALARI ============
 
-def get_or_create_user(telegram_id, username=None, full_name=None):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
-        user = cursor.fetchone()
-        
-        if not user:
-            cursor.execute('''
-                INSERT INTO users (telegram_id, username, full_name)
-                VALUES (?, ?, ?)
-            ''', (telegram_id, username, full_name))
-            conn.commit()
-            cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
-            user = cursor.fetchone()
-        
-        return dict(user)
+async def get_or_create_user(telegram_id, username=None, full_name=None):
+    user = await db.users.find_one({"telegram_id": telegram_id})
+    if not user:
+        new_user = {
+            "telegram_id": telegram_id,
+            "username": username,
+            "full_name": full_name,
+            "phone": None,
+            "role": "user",
+            "is_active": True,
+            "created_at": datetime.now()
+        }
+        await db.users.insert_one(new_user)
+        user = await db.users.find_one({"telegram_id": telegram_id})
+    return user
 
-def update_user_phone(telegram_id, phone):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("UPDATE users SET phone = ? WHERE telegram_id = ?", (phone, telegram_id))
-        conn.commit()
+async def update_user_phone(telegram_id, phone):
+    await db.users.update_one(
+        {"telegram_id": telegram_id},
+        {"$set": {"phone": phone}}
+    )
 
-def get_user_by_telegram_id(telegram_id):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
-        user = cursor.fetchone()
-        return dict(user) if user else None
+async def get_user_by_telegram_id(telegram_id):
+    return await db.users.find_one({"telegram_id": telegram_id})
 
-def get_all_workers():
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE role = 'worker' AND is_active = 1")
-        return [dict(row) for row in cursor.fetchall()]
+async def get_all_workers():
+    workers = await db.users.find({"role": "worker", "is_active": True}).to_list(length=None)
+    return workers
 
-def add_worker(telegram_id, username, full_name, phone):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO users (telegram_id, username, full_name, phone, role)
-            VALUES (?, ?, ?, ?, 'worker')
-            ON CONFLICT(telegram_id) DO UPDATE SET role = 'worker', is_active = 1
-        ''', (telegram_id, username, full_name, phone))
-        conn.commit()
+async def add_worker(telegram_id, username, full_name, phone):
+    await db.users.update_one(
+        {"telegram_id": telegram_id},
+        {"$set": {
+            "username": username,
+            "full_name": full_name,
+            "phone": phone,
+            "role": "worker",
+            "is_active": True
+        }},
+        upsert=True
+    )
 
-def remove_worker(telegram_id):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("UPDATE users SET role = 'user', is_active = 0 WHERE telegram_id = ?", (telegram_id,))
-        conn.commit()
+async def remove_worker(telegram_id):
+    await db.users.update_one(
+        {"telegram_id": telegram_id},
+        {"$set": {"role": "user", "is_active": False}}
+    )
 
-def get_next_worker_round_robin():
-    """Eng kam buyurtma olgan faol hodimni qaytaradi (round-robin)"""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT u.id, u.telegram_id, u.full_name, u.phone,
-                   COUNT(o.id) as active_orders
-            FROM users u
-            LEFT JOIN orders o ON o.worker_id = u.id
-                AND o.status NOT IN ('completed', 'cancelled')
-            WHERE u.role = 'worker' AND u.is_active = 1
-            GROUP BY u.id
-            ORDER BY active_orders ASC, u.id ASC
-            LIMIT 1
-        ''')
-        row = cursor.fetchone()
-        return dict(row) if row else None
-
+async def get_next_worker_round_robin():
+    """Eng kam buyurtma olgan faol hodimni qaytaradi"""
+    # Simple logic: Sort by total active orders
+    workers = await db.users.find({"role": "worker", "is_active": True}).to_list(length=None)
+    if not workers:
+        return None
+    
+    # Count active orders for each worker
+    worker_loads = []
+    for w in workers:
+        count = await db.orders.count_documents({
+            "worker_id": w["telegram_id"], # Link by telegram_id now for simplicity
+            "status": {"$nin": ["completed", "cancelled"]}
+        })
+        worker_loads.append({"worker": w, "count": count})
+    
+    # Sort by count
+    worker_loads.sort(key=lambda x: x["count"])
+    return worker_loads[0]["worker"]
 
 # ============ SERVICE FUNKSIYALARI ============
 
-def get_all_services(active_only=True):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        if active_only:
-            cursor.execute("SELECT * FROM services WHERE is_active = 1 ORDER BY id")
-        else:
-            cursor.execute("SELECT * FROM services ORDER BY id")
-        return [dict(row) for row in cursor.fetchall()]
+async def get_all_services(active_only=True):
+    query = {"is_active": True} if active_only else {}
+    services = await db.services.find(query).sort("created_at", 1).to_list(length=None)
+    # Convert _id to id string for frontend compatibility if needed, or just use as is
+    for s in services:
+        s['id'] = str(s['_id'])
+    return services
 
-def get_service_by_id(service_id):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM services WHERE id = ?", (service_id,))
-        row = cursor.fetchone()
-        return dict(row) if row else None
+async def get_service_by_id(service_id):
+    from bson.objectid import ObjectId
+    try:
+        service = await db.services.find_one({"_id": ObjectId(service_id)})
+        if service:
+            service['id'] = str(service['_id'])
+        return service
+    except:
+        return None
 
-def add_service(name, description, price, duration, category):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO services (name, description, price, duration, category)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (name, description, price, duration, category))
-        conn.commit()
+async def add_service(name, description, price, duration, category):
+    await db.services.insert_one({
+        "name": name,
+        "description": description,
+        "price": float(price),
+        "duration": int(duration),
+        "category": category,
+        "is_active": True,
+        "created_at": datetime.now()
+    })
 
-def update_service(service_id, name, description, price, duration, category, is_active):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE services 
-            SET name = ?, description = ?, price = ?, duration = ?, category = ?, is_active = ?
-            WHERE id = ?
-        ''', (name, description, price, duration, category, is_active, service_id))
-        conn.commit()
+async def update_service(service_id, name, description, price, duration, category, is_active):
+    from bson.objectid import ObjectId
+    await db.services.update_one(
+        {"_id": ObjectId(service_id)},
+        {"$set": {
+            "name": name,
+            "description": description,
+            "price": float(price),
+            "duration": int(duration),
+            "category": category,
+            "is_active": bool(is_active)
+        }}
+    )
 
-def delete_service(service_id):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM services WHERE id = ?", (service_id,))
-        conn.commit()
+async def delete_service(service_id):
+    from bson.objectid import ObjectId
+    await db.services.delete_one({"_id": ObjectId(service_id)})
 
 # ============ ORDER FUNKSIYALARI ============
 
 def generate_order_number():
     return f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-def create_order(user_id, service_id, total_price, payment_method, comment=None, voice_note_url=None):
+async def create_order(user_id, service_id, total_price, payment_method, comment=None, voice_note_url=None):
     order_number = generate_order_number()
-    # Round-robin: avtomatik hodim tanlash
-    next_worker = get_next_worker_round_robin()
-    worker_id = next_worker['id'] if next_worker else None
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO orders (order_number, user_id, worker_id, service_id, total_price, payment_method, comment, voice_note_url, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (order_number, user_id, worker_id, service_id, total_price, payment_method, comment, voice_note_url,
-              'accepted' if worker_id else 'new'))
-        conn.commit()
-        order_id = cursor.lastrowid
-        return get_order_by_id(order_id), next_worker
+    next_worker = await get_next_worker_round_robin()
+    worker_id = next_worker['telegram_id'] if next_worker else None # Store telegram_id
+    
+    # Find service name
+    service = await get_service_by_id(service_id)
+    service_name = service['name'] if service else "Noma'lum"
 
-def get_order_by_id(order_id):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT o.*, u.full_name as user_name, u.phone as user_phone, s.name as service_name
-            FROM orders o
-            LEFT JOIN users u ON o.user_id = u.id
-            LEFT JOIN services s ON o.service_id = s.id
-            WHERE o.id = ?
-        ''', (order_id,))
-        row = cursor.fetchone()
-        return dict(row) if row else None
+    # Find user info
+    user = await db.users.find_one({"telegram_id": user_id})
+    user_name = user['full_name'] if user else "Mijoz"
 
-def get_orders_by_user(user_id):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT o.*, s.name as service_name
-            FROM orders o
-            LEFT JOIN services s ON o.service_id = s.id
-            WHERE o.user_id = ?
-            ORDER BY o.created_at DESC
-        ''', (user_id,))
-        return [dict(row) for row in cursor.fetchall()]
+    new_order = {
+        "order_number": order_number,
+        "user_id": user_id,
+        "user_name": user_name,
+        "worker_id": worker_id,
+        "service_id": service_id,
+        "service_name": service_name,
+        "total_price": float(total_price),
+        "payment_method": payment_method,
+        "payment_status": "pending",
+        "status": "accepted" if worker_id else "new",
+        "comment": comment,
+        "voice_note_url": voice_note_url,
+        "receipt_url": None,
+        "created_at": datetime.now(),
+        "accepted_at": datetime.now() if worker_id else None,
+        "completed_at": None
+    }
+    
+    result = await db.orders.insert_one(new_order)
+    new_order['id'] = str(result.inserted_id)
+    return new_order, next_worker
 
-def get_new_orders():
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT o.*, u.full_name as user_name, u.phone as user_phone, s.name as service_name
-            FROM orders o
-            LEFT JOIN users u ON o.user_id = u.id
-            LEFT JOIN services s ON o.service_id = s.id
-            WHERE o.status = 'new' AND o.payment_status = 'confirmed'
-            ORDER BY o.created_at ASC
-        ''')
-        return [dict(row) for row in cursor.fetchall()]
+async def get_order_by_id(order_id):
+    from bson.objectid import ObjectId
+    try:
+        order = await db.orders.find_one({"_id": ObjectId(order_id)})
+        if order:
+            order['id'] = str(order['_id'])
+        return order
+    except:
+        return None
 
-def get_worker_orders(worker_id, status=None):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        if status:
-            cursor.execute('''
-                SELECT o.*, u.full_name as user_name, u.phone as user_phone, s.name as service_name
-                FROM orders o
-                LEFT JOIN users u ON o.user_id = u.id
-                LEFT JOIN services s ON o.service_id = s.id
-                WHERE o.worker_id = ? AND o.status = ?
-                ORDER BY o.created_at DESC
-            ''', (worker_id, status))
-        else:
-            cursor.execute('''
-                SELECT o.*, u.full_name as user_name, u.phone as user_phone, s.name as service_name
-                FROM orders o
-                LEFT JOIN users u ON o.user_id = u.id
-                LEFT JOIN services s ON o.service_id = s.id
-                WHERE o.worker_id = ?
-                ORDER BY o.created_at DESC
-            ''', (worker_id,))
-        return [dict(row) for row in cursor.fetchall()]
+async def get_orders_by_user(user_id):
+    orders = await db.orders.find({"user_id": user_id}).sort("created_at", -1).to_list(length=None)
+    for o in orders:
+        o['id'] = str(o['_id'])
+    return orders
 
-def update_order_status(order_id, status, worker_id=None):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        if worker_id:
-            cursor.execute('''
-                UPDATE orders SET status = ?, worker_id = ?, accepted_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            ''', (status, worker_id, order_id))
-        else:
-            cursor.execute('''
-                UPDATE orders SET status = ?, completed_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            ''', (status, order_id))
-        conn.commit()
+async def get_new_orders():
+    orders = await db.orders.find({"status": "new", "payment_status": "confirmed"}).sort("created_at", 1).to_list(length=None)
+    for o in orders:
+        o['id'] = str(o['_id'])
+    return orders
 
-def update_order_payment_status(order_id, status, receipt_url=None):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        if receipt_url:
-            cursor.execute('''
-                UPDATE orders SET payment_status = ?, receipt_url = ?
-                WHERE id = ?
-            ''', (status, receipt_url, order_id))
-        else:
-            cursor.execute('''
-                UPDATE orders SET payment_status = ?
-                WHERE id = ?
-            ''', (status, order_id))
-        conn.commit()
+async def get_worker_orders(worker_id, status=None):
+    query = {"worker_id": worker_id}
+    if status:
+        query["status"] = status
+    orders = await db.orders.find(query).sort("created_at", -1).to_list(length=None)
+    for o in orders:
+        o['id'] = str(o['_id'])
+    return orders
 
-def assign_order_to_worker(order_id, worker_id):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE orders SET worker_id = ?, status = 'accepted', accepted_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        ''', (worker_id, order_id))
-        conn.commit()
+async def update_order_status(order_id, status, worker_id=None):
+    from bson.objectid import ObjectId
+    update_data = {"status": status}
+    if worker_id:
+        update_data["worker_id"] = worker_id
+        update_data["accepted_at"] = datetime.now()
+    if status == "completed":
+        update_data["completed_at"] = datetime.now()
+        
+    await db.orders.update_one(
+        {"_id": ObjectId(order_id)},
+        {"$set": update_data}
+    )
 
-def update_worker_stats(worker_id, amount):
-    today = datetime.now().date()
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO worker_stats (worker_id, date, orders_count, total_amount)
-            VALUES (?, ?, 1, ?)
-            ON CONFLICT(worker_id, date) DO UPDATE SET
-                orders_count = orders_count + 1,
-                total_amount = total_amount + ?
-        ''', (worker_id, today, amount, amount))
-        conn.commit()
+async def update_order_payment_status(order_id, status, receipt_url=None):
+    from bson.objectid import ObjectId
+    update_data = {"payment_status": status}
+    if receipt_url:
+        update_data["receipt_url"] = receipt_url
+    
+    await db.orders.update_one(
+        {"_id": ObjectId(order_id)},
+        {"$set": update_data}
+    )
 
-def get_worker_today_stats(worker_id):
-    today = datetime.now().date()
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT orders_count, total_amount FROM worker_stats
-            WHERE worker_id = ? AND date = ?
-        ''', (worker_id, today))
-        row = cursor.fetchone()
-        if row:
-            return dict(row)
-        return {"orders_count": 0, "total_amount": 0}
+async def assign_order_to_worker(order_id, worker_id):
+    from bson.objectid import ObjectId
+    await db.orders.update_one(
+        {"_id": ObjectId(order_id)},
+        {"$set": {"worker_id": worker_id, "status": "accepted", "accepted_at": datetime.now()}}
+    )
 
-def get_worker_history(worker_id):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT date, orders_count, total_amount FROM worker_stats
-            WHERE worker_id = ?
-            ORDER BY date DESC
-            LIMIT 30
-        ''', (worker_id,))
-        return [dict(row) for row in cursor.fetchall()]
+async def update_worker_stats(worker_id, amount):
+    today = datetime.now().strftime("%Y-%m-%d")
+    await db.worker_stats.update_one(
+        {"worker_id": worker_id, "date": today},
+        {"$inc": {"orders_count": 1, "total_amount": float(amount)}},
+        upsert=True
+    )
+
+async def get_worker_today_stats(worker_id):
+    today = datetime.now().strftime("%Y-%m-%d")
+    stats = await db.worker_stats.find_one({"worker_id": worker_id, "date": today})
+    if stats:
+        return stats
+    return {"orders_count": 0, "total_amount": 0}
+
+async def get_worker_history(worker_id):
+    history = await db.worker_stats.find({"worker_id": worker_id}).sort("date", -1).limit(30).to_list(length=None)
+    return history
 
 # ============ ADMIN FUNKSIYALARI ============
 
-def get_all_orders():
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT o.*, u.full_name as user_name, u.phone as user_phone, 
-                   s.name as service_name, w.full_name as worker_name
-            FROM orders o
-            LEFT JOIN users u ON o.user_id = u.id
-            LEFT JOIN services s ON o.service_id = s.id
-            LEFT JOIN users w ON o.worker_id = w.id
-            ORDER BY o.created_at DESC
-        ''')
-        return [dict(row) for row in cursor.fetchall()]
+async def get_all_orders():
+    orders = await db.orders.find().sort("created_at", -1).to_list(length=None)
+    for o in orders:
+        o['id'] = str(o['_id'])
+        # Add worker_name
+        if o.get('worker_id'):
+            worker = await db.users.find_one({"telegram_id": o['worker_id']})
+            o['worker_name'] = worker['full_name'] if worker else "Noma'lum"
+    return orders
 
-def get_statistics():
-    with get_db() as conn:
-        cursor = conn.cursor()
-        
-        today = datetime.now().date()
-        
-        # Bugungi buyurtmalar
-        cursor.execute('''
-            SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as total
-            FROM orders
-            WHERE date(created_at) = ?
-        ''', (today,))
-        today_stats = cursor.fetchone()
-        
-        # Oylik buyurtmalar
-        cursor.execute('''
-            SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as total
-            FROM orders
-            WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
-        ''')
-        monthly_stats = cursor.fetchone()
-        
-        # Kutilayotgan buyurtmalar
-        cursor.execute('''
-            SELECT COUNT(*) FROM orders WHERE payment_status = 'pending'
-        ''')
-        pending_count = cursor.fetchone()[0]
-        
-        # Jarayondagi buyurtmalar
-        cursor.execute('''
-            SELECT COUNT(*) FROM orders WHERE status = 'accepted' OR status = 'in_progress'
-        ''')
-        in_progress_count = cursor.fetchone()[0]
-        
-        return {
-            "today_orders": today_stats[0] or 0,
-            "today_amount": today_stats[1] or 0,
-            "monthly_orders": monthly_stats[0] or 0,
-            "monthly_amount": monthly_stats[1] or 0,
-            "pending_payments": pending_count,
-            "in_progress_orders": in_progress_count
-        }
+async def get_statistics():
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    month_str = datetime.now().strftime("%Y-%m")
+    
+    # Today
+    today_query = {"created_at": {"$gte": datetime.strptime(today_str, "%Y-%m-%d")}}
+    today_orders = await db.orders.count_documents(today_query)
+    
+    # Today total amount (aggregation)
+    pipeline = [
+        {"$match": today_query},
+        {"$group": {"_id": None, "total": {"$sum": "$total_price"}}}
+    ]
+    today_res = await db.orders.aggregate(pipeline).to_list(length=1)
+    today_amount = today_res[0]['total'] if today_res else 0
 
-def get_workers_ranking():
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT u.id, u.full_name, 
-                   COALESCE(SUM(ws.orders_count), 0) as total_orders,
-                   COALESCE(SUM(ws.total_amount), 0) as total_amount
-            FROM users u
-            LEFT JOIN worker_stats ws ON u.id = ws.worker_id
-            WHERE u.role = 'worker'
-            GROUP BY u.id
-            ORDER BY total_amount DESC
-        ''')
-        return [dict(row) for row in cursor.fetchall()]
+    # Pending and in progress
+    pending = await db.orders.count_documents({"payment_status": "pending"})
+    in_progress = await db.orders.count_documents({"status": {"$in": ["accepted", "in_progress"]}})
 
-def check_admin_user(username, password):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM admin_users WHERE username = ? AND password = ?", (username, password))
-        return cursor.fetchone() is not None
+    return {
+        "today_orders": today_orders,
+        "today_amount": today_amount,
+        "monthly_orders": 0, # Simplified for now
+        "monthly_amount": 0,
+        "pending_payments": pending,
+        "in_progress_orders": in_progress
+    }
+
+async def get_workers_ranking():
+    # Group by worker_id in orders or worker_stats
+    pipeline = [
+        {"$group": {
+            "_id": "$worker_id", 
+            "total_orders": {"$sum": 1},
+            "total_amount": {"$sum": "$total_price"}
+        }},
+        {"$sort": {"total_amount": -1}}
+    ]
+    results = await db.orders.aggregate(pipeline).to_list(length=None)
+    
+    ranking = []
+    for res in results:
+        if res['_id']:
+            worker = await db.users.find_one({"telegram_id": res['_id']})
+            if worker:
+                ranking.append({
+                    "full_name": worker['full_name'],
+                    "total_orders": res['total_orders'],
+                    "total_amount": res['total_amount'],
+                    "phone": worker.get('phone', '')
+                })
+    return ranking
+
+async def check_admin_user(username, password):
+    user = await db.admin_users.find_one({"username": username, "password": password})
+    return user is not None
+
+async def get_admin_user(username, password):
+    return await db.admin_users.find_one({"username": username, "password": password})
+
+async def get_admin_by_id(user_id):
+    from bson.objectid import ObjectId
+    try:
+        return await db.admin_users.find_one({"_id": ObjectId(user_id)})
+    except:
+        return None

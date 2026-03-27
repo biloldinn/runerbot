@@ -28,7 +28,7 @@ async def set_commands(bot: Bot):
 
 async def main():
     # Initialize database
-    init_db()
+    await init_db()
     
     # Create bot and dispatcher
     from aiogram.client.default import DefaultBotProperties

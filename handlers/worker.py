@@ -15,13 +15,13 @@ router = Router()
 
 @router.message(F.text == "📋 Yangi buyurtmalar")
 async def worker_new_orders(message: Message):
-    user = get_user_by_telegram_id(message.from_user.id)
+    user = await get_user_by_telegram_id(message.from_user.id)
     
     if user.get('role') != 'worker':
         await message.answer("❌ Bu funksiya faqat hodimlar uchun!")
         return
     
-    orders = get_new_orders()
+    orders = await get_new_orders()
     
     if not orders:
         await message.answer("📭 Yangi buyurtmalar yo‘q.")
@@ -37,17 +37,17 @@ async def worker_new_orders(message: Message):
 
 @router.callback_query(F.data.startswith("worker_accept_"))
 async def worker_accept_order(callback: CallbackQuery, bot: Bot):
-    order_id = int(callback.data.split("_")[2])
-    worker = get_user_by_telegram_id(callback.from_user.id)
-    order = get_order_by_id(order_id)
+    order_id = callback.data.split("_")[2]
+    worker = await get_user_by_telegram_id(callback.from_user.id)
+    order = await get_order_by_id(order_id)
     
     if not order:
         await callback.answer("Buyurtma topilmadi!")
         return
     
     # Buyurtmani hodimga biriktirish
-    assign_order_to_worker(order_id, worker['id'])
-    update_order_status(order_id, "accepted")
+    await assign_order_to_worker(order_id, worker['telegram_id'])
+    await update_order_status(order_id, "accepted")
     
     # Mijozga xabar
     try:
@@ -87,14 +87,14 @@ async def worker_accept_order(callback: CallbackQuery, bot: Bot):
 
 @router.message(F.text == "🔧 Jarayondagilar")
 async def worker_in_progress(message: Message):
-    user = get_user_by_telegram_id(message.from_user.id)
+    user = await get_user_by_telegram_id(message.from_user.id)
     
     if user.get('role') != 'worker':
         await message.answer("❌ Bu funksiya faqat hodimlar uchun!")
         return
     
-    orders = get_worker_orders(user['id'], "accepted")
-    orders += get_worker_orders(user['id'], "in_progress")
+    orders = await get_worker_orders(user['telegram_id'], "accepted")
+    orders += await get_worker_orders(user['telegram_id'], "in_progress")
     
     if not orders:
         await message.answer("🔧 Jarayondagi buyurtmalar yo‘q.")
@@ -109,17 +109,17 @@ async def worker_in_progress(message: Message):
 
 @router.callback_query(F.data.startswith("worker_complete_"))
 async def worker_complete_order(callback: CallbackQuery, bot: Bot):
-    order_id = int(callback.data.split("_")[2])
-    worker = get_user_by_telegram_id(callback.from_user.id)
-    order = get_order_by_id(order_id)
+    order_id = callback.data.split("_")[2]
+    worker = await get_user_by_telegram_id(callback.from_user.id)
+    order = await get_order_by_id(order_id)
     
     if not order:
         await callback.answer("Buyurtma topilmadi!")
         return
     
     # Buyurtmani bajarilgan deb belgilash
-    update_order_status(order_id, "completed")
-    update_worker_stats(worker['id'], order['total_price'])
+    await update_order_status(order_id, "completed")
+    await update_worker_stats(worker['telegram_id'], order['total_price'])
     
     # 10 daqiqadan keyin mijozga xabar yuborish
     await callback.message.answer(
@@ -148,14 +148,14 @@ async def worker_complete_order(callback: CallbackQuery, bot: Bot):
 
 @router.message(F.text == "✅ Bajarilganlar")
 async def worker_completed(message: Message):
-    user = get_user_by_telegram_id(message.from_user.id)
+    user = await get_user_by_telegram_id(message.from_user.id)
     
     if user.get('role') != 'worker':
         await message.answer("❌ Bu funksiya faqat hodimlar uchun!")
         return
     
-    orders = get_worker_orders(user['id'], "completed")
-    today_stats = get_worker_today_stats(user['id'])
+    orders = await get_worker_orders(user['telegram_id'], "completed")
+    today_stats = await get_worker_today_stats(user['telegram_id'])
     
     if not orders:
         await message.answer("📭 Bajarilgan buyurtmalar yo‘q.")
@@ -174,14 +174,14 @@ async def worker_completed(message: Message):
 
 @router.message(F.text == "📊 Mening statistikam")
 async def worker_stats(message: Message):
-    user = get_user_by_telegram_id(message.from_user.id)
+    user = await get_user_by_telegram_id(message.from_user.id)
     
     if user.get('role') != 'worker':
         await message.answer("❌ Bu funksiya faqat hodimlar uchun!")
         return
     
-    today_stats = get_worker_today_stats(user['id'])
-    history = get_worker_history(user['id'])
+    today_stats = await get_worker_today_stats(user['telegram_id'])
+    history = await get_worker_history(user['telegram_id'])
     
     total_orders = sum(h['orders_count'] for h in history)
     total_amount = sum(h['total_amount'] for h in history)
