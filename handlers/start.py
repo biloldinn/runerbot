@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -97,21 +97,18 @@ async def contact_info(message: Message):
     )
     await message.answer(text, parse_mode="Markdown")
 
-@router.message(F.text == "👤 Profil")
-async def profile_info(message: Message):
-    user = await get_user_by_telegram_id(message.from_user.id)
-    if not user:
-        await message.answer("❌ Profilingiz topilmadi. /start buyrug'ini bosing.")
-        return
-        
+@router.message(F.text == "✍️ Taklif va shikoyatlar")
+async def support_info(message: Message):
     text = (
-        f"👤 **Sizning profilingiz**\n\n"
-        f"🆔 ID: `{user['telegram_id']}`\n"
-        f"👤 Ism: {user['full_name']}\n"
-        f"📱 Tel: {user.get('phone', 'Noma\'lum')}\n"
-        f"🎭 Rol: {user.get('role', 'Foydalanuvchi')}\n"
+        "✍️ **Taklif va shikoyatlar bo'limi**\n\n"
+        "Shikoyat yoki takliflaringiz bo'lsa, @Dasturchi_bt ga murojaat qiling.\n"
+        "Sizning fikringiz biz uchun muhim!"
     )
-    await message.answer(text, parse_mode="Markdown")
+    # Inline keyboard with button link
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✍️ Bog'lanish", url="https://t.me/Dasturchi_bt")]
+    ])
+    await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
 
 @router.message(Command("cancel"))
 async def cmd_cancel(message: Message, state: FSMContext):

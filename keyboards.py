@@ -5,7 +5,7 @@ def get_main_keyboard(is_admin=False):
     buttons = [
         [KeyboardButton(text="💻 Xizmatlar")],
         [KeyboardButton(text="📝 Mening buyurtmalarim")],
-        [KeyboardButton(text="📞 Aloqa"), KeyboardButton(text="👤 Profil")]
+        [KeyboardButton(text="📞 Aloqa"), KeyboardButton(text="✍️ Taklif va shikoyatlar")]
     ]
     if is_admin and WEBAPP_URL:
         buttons.insert(0, [KeyboardButton(text="🌐 Boshqaruv Paneli", web_app=WebAppInfo(url=WEBAPP_URL))])
@@ -16,7 +16,7 @@ def get_worker_keyboard(is_admin=False):
     buttons = [
         [KeyboardButton(text="📋 Yangi buyurtmalar")],
         [KeyboardButton(text="🔧 Jarayondagilar"), KeyboardButton(text="✅ Bajarilganlar")],
-        [KeyboardButton(text="📊 Mening statistikam"), KeyboardButton(text="👤 Profil")]
+        [KeyboardButton(text="📊 Mening statistikam"), KeyboardButton(text="✍️ Taklif va shikoyatlar")]
     ]
     if is_admin and WEBAPP_URL:
         buttons.insert(0, [KeyboardButton(text="🌐 Boshqaruv Paneli", web_app=WebAppInfo(url=WEBAPP_URL))])
