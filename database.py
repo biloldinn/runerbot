@@ -62,6 +62,12 @@ async def get_all_users():
     return await db.users.find({}).to_list(length=None)
 
 
+async def update_user_name(telegram_id, full_name):
+    await db.users.update_one(
+        {"telegram_id": telegram_id},
+        {"$set": {"full_name": full_name}}
+    )
+
 async def update_user_phone(telegram_id, phone):
     await db.users.update_one(
         {"telegram_id": telegram_id},

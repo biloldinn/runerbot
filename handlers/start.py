@@ -4,13 +4,14 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from database import get_or_create_user, get_user_by_telegram_id, update_user_phone, get_settings
+from database import get_or_create_user, get_user_by_telegram_id, update_user_phone, get_settings, update_user_name
 from keyboards import get_main_keyboard, get_worker_keyboard
 from config import ADMIN_IDS
 
 router = Router()
 
 class RegisterState(StatesGroup):
+    waiting_for_name = State()
     waiting_for_phone = State()
 
 @router.message(CommandStart())
@@ -21,18 +22,10 @@ async def cmd_start(message: Message, state: FSMContext):
         full_name=message.from_user.full_name
     )
     
-    # Telefon raqam so'rash
-    if not user.get('phone'):
-        keyboard = ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="📱 Telefon raqamni yuborish", request_contact=True)]],
-            resize_keyboard=True,
-            one_time_keyboard=True
-        )
-        await message.answer(
-            "👋 Xush kelibsiz! Iltimos, telefon raqamingizni yuboring:",
-            reply_markup=keyboard
-        )
-        await state.set_state(RegisterState.waiting_for_phone)
+    # Ismni tekshirish yoki so'rash
+    if not user.get('phone') or user.get('full_name') == message.from_user.full_name:
+        await message.answer("👋 Xush kelibsiz! Iltimos, ism-familiyangizni kiriting:", reply_markup=ReplyKeyboardRemove())
+        await state.set_state(RegisterState.waiting_for_name)
         return
     
     is_admin = message.from_user.id in ADMIN_IDS
@@ -54,6 +47,21 @@ async def cmd_start(message: Message, state: FSMContext):
             reply_markup=get_main_keyboard(is_admin=is_admin),
             parse_mode="Markdown"
         )
+
+@router.message(RegisterState.waiting_for_name)
+async def process_name(message: Message, state: FSMContext):
+    await update_user_name(message.from_user.id, message.text)
+    
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📱 Telefon raqamni yuborish", request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    await message.answer(
+        f"Rahmat, {message.text}! Endi iltimos, telefon raqamingizni yuboring:",
+        reply_markup=keyboard
+    )
+    await state.set_state(RegisterState.waiting_for_phone)
 
 @router.message(RegisterState.waiting_for_phone, F.contact)
 async def get_phone(message: Message, state: FSMContext):
