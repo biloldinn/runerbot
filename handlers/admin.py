@@ -3,7 +3,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from database import get_order_by_id, update_order_payment_status, add_worker, add_service, get_all_services
+from database import get_order_by_id, update_order_payment_status, add_worker, add_service, get_all_services, update_settings
 from config import ADMIN_IDS, WEBAPP_URL
 
 router = Router()
@@ -17,6 +17,8 @@ class AdminStates(StatesGroup):
     waiting_service_name = State()
     waiting_service_price = State()
     waiting_service_desc = State()
+    # Sozlamalar
+    waiting_settings_phone = State()
 
 @router.message(Command("admin"))
 async def admin_main(message: Message):
@@ -28,6 +30,7 @@ async def admin_main(message: Message):
         [InlineKeyboardButton(text="🌐 Web Hisobotlar", web_app=WebAppInfo(url=WEBAPP_URL))] if WEBAPP_URL else [],
         [InlineKeyboardButton(text="👤 Xodim qo'shish", callback_data="add_worker_bot")],
         [InlineKeyboardButton(text="🛠 Xizmat qo'shish", callback_data="add_service_bot")],
+        [InlineKeyboardButton(text="⚙️ Sozlamalar", callback_data="admin_settings")],
         [InlineKeyboardButton(text="📦 Buyurtmalar", callback_data="admin_orders")],
     ])
     
@@ -96,7 +99,23 @@ async def process_service_desc(message: Message, state: FSMContext):
     await message.answer(f"✅ Xizmat qo'shildi: **{data['s_name']}**")
     await state.clear()
 
-# --- Boshqa funksiyalar ---
+# --- Sozlamalar ---
+@router.callback_query(F.data == "admin_settings")
+async def admin_settings(callback: CallbackQuery, state: FSMContext):
+    await callback.message.answer(
+        "⚙️ **Sozlamalar bo'limi**\n\n"
+        "Yangi kontakt telefon raqamini yuboring (masalan: +998901234567):",
+        parse_mode="Markdown"
+    )
+    await state.set_state(AdminStates.waiting_settings_phone)
+    await callback.answer()
+
+@router.message(AdminStates.waiting_settings_phone)
+async def process_settings_phone(message: Message, state: FSMContext):
+    new_phone = message.text
+    await update_settings({"phone": new_phone})
+    await message.answer(f"✅ Kontakt telefon raqami muvaffaqiyatli saqlandi: {new_phone}")
+    await state.clear()
 @router.message(F.text.startswith("/check_"))
 async def check_order_receipt(message: Message, bot: Bot):
     if message.from_user.id not in ADMIN_IDS: return

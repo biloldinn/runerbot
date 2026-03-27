@@ -3,7 +3,7 @@ from config import WEBAPP_URL
 
 def get_main_keyboard(is_admin=False):
     buttons = [
-        [KeyboardButton(text="🛠 Xizmatlar")],
+        [KeyboardButton(text="💻 Xizmatlar")],
         [KeyboardButton(text="📝 Mening buyurtmalarim")],
         [KeyboardButton(text="📞 Aloqa"), KeyboardButton(text="👤 Profil")]
     ]

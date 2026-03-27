@@ -14,6 +14,21 @@ async def init_db():
     await db.admin_users.create_index("username", unique=True)
     await db.worker_stats.create_index([("worker_id", 1), ("date", 1)], unique=True)
     
+    # Initialize default settings
+    if not await db.settings.find_one({"key": "contact_info"}):
+        await db.settings.insert_one({
+            "key": "contact_info",
+            "phone": "+998 90 123 45 67",
+            "address": "Turon o‘quv markazi",
+            "work_hours": "09:00 - 18:00"
+        })
+
+async def get_settings():
+    return await db.settings.find_one({"key": "contact_info"})
+
+async def update_settings(data):
+    await db.settings.update_one({"key": "contact_info"}, {"$set": data}, upsert=True)
+    
     # Check if default admin exists
     admin = await db.admin_users.find_one({"username": "admin"})
     if not admin:

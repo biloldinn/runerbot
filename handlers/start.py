@@ -4,7 +4,7 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from database import get_or_create_user, get_user_by_telegram_id, update_user_phone
+from database import get_or_create_user, get_user_by_telegram_id, update_user_phone, get_settings
 from keyboards import get_main_keyboard, get_worker_keyboard
 from config import ADMIN_IDS
 
@@ -83,6 +83,35 @@ async def get_phone(message: Message, state: FSMContext):
         )
     
     await state.clear()
+
+# ...
+@router.message(F.text == "📞 Aloqa")
+async def contact_info(message: Message):
+    settings = await get_settings()
+    text = (
+        "📞 **Aloqa ma'lumotlari**\n\n"
+        f"📍 Manzil: {settings.get('address')}\n"
+        f"☎️ Telefon: {settings.get('phone')}\n"
+        f"🕰 Ish vaqti: {settings.get('work_hours')}\n\n"
+        "Savollaringiz bo'lsa, adminga murojaat qiling."
+    )
+    await message.answer(text, parse_mode="Markdown")
+
+@router.message(F.text == "👤 Profil")
+async def profile_info(message: Message):
+    user = await get_user_by_telegram_id(message.from_user.id)
+    if not user:
+        await message.answer("❌ Profilingiz topilmadi. /start buyrug'ini bosing.")
+        return
+        
+    text = (
+        f"👤 **Sizning profilingiz**\n\n"
+        f"🆔 ID: `{user['telegram_id']}`\n"
+        f"👤 Ism: {user['full_name']}\n"
+        f"📱 Tel: {user.get('phone', 'Noma\'lum')}\n"
+        f"🎭 Rol: {user.get('role', 'Foydalanuvchi')}\n"
+    )
+    await message.answer(text, parse_mode="Markdown")
 
 @router.message(Command("cancel"))
 async def cmd_cancel(message: Message, state: FSMContext):
