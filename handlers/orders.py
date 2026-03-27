@@ -62,24 +62,92 @@ async def get_comment(message: Message, state: FSMContext):
     text = (
         f"💳 **To‘lov usulini tanlang**\n\n"
         f"💰 Summa: {service_price:,} so‘m\n\n"
-        f"To‘lovni amalga oshirib, chekni yuboring.\n"
-        f"Admin tomonidan tasdiqlangandan so‘ng buyurtma qabul qilinadi."
+        f"Online to'lov orqali chek yuboring yoki borganda naqd to'lashni tanlang."
     )
     
     keyboard = get_payment_keyboard()
     await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+
+@router.callback_query(F.data == "pay_online")
+async def pay_online_handler(callback: CallbackQuery, state: FSMContext):
+    from database import get_settings
+    settings = await get_settings()
+    data = await state.get_data()
+    service_price = data.get('service_price')
+    
+    text = (
+        f"💳 **Online To‘lov**\n\n"
+        f"💰 Summa: {service_price:,} so‘m\n"
+        f"💳 Karta: `{settings.get('card_number', 'Belgilanmagan')}`\n"
+        f"👤 Egasi: {settings.get('card_owner', 'Belgilanmagan')}\n\n"
+        f"To‘lovdan so‘ng **chekni (rasm)** yuboring."
+    )
+    await callback.message.edit_text(text, parse_mode="Markdown")
     await state.set_state(OrderState.waiting_for_receipt)
+    await callback.answer()
+
+@router.callback_query(F.data == "pay_at_location")
+async def pay_at_location_handler(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    data = await state.get_data()
+    service_id = data.get('service_id')
+    service_price = data.get('service_price')
+    comment = data.get('comment')
+    user = await get_user_by_telegram_id(callback.from_user.id)
+    
+    order, assigned_worker = await create_order(
+        user_id=user['telegram_id'],
+        service_id=service_id,
+        total_price=service_price,
+        payment_method="at_location",
+        comment=comment
+    )
+    
+    # Notify user
+    worker_info = f"\n👨‍💻 Hodim: {assigned_worker['full_name']}" if assigned_worker else ""
+    await callback.message.edit_text(
+        "✅ **Buyurtma qabul qilindi!**\n\n"
+        f"📦 Buyurtma raqami: `{order['order_number']}`\n"
+        f"💰 Summa: {service_price:,} so'm\n"
+        "📍 To'lov: Xizmat ko'rsatilgan joyda."
+        f"{worker_info}\n\n"
+        "Xizmat ko'rsatish boshlanishi bilanoq sizga bildirishnoma keladi.",
+        parse_mode="Markdown"
+    )
+    
+    # Notify worker and admin
+    if assigned_worker:
+        try:
+            await bot.send_message(
+                assigned_worker['telegram_id'],
+                f"🆕 **Yangi buyurtma (Joyida to'lov)!**\n\n"
+                f"📦 #{order['order_number']}\n"
+                f"👤 Mijoz: {user['full_name']}\n"
+                f"💰 {service_price:,} so'm\n"
+                f"📝 Izoh: {comment or 'Yoq'}",
+                parse_mode="Markdown"
+            )
+        except: pass
+        
+    for admin_id in ADMIN_IDS:
+        try:
+            await bot.send_message(admin_id, f"🆕 **Yangi buyurtma (Joyida to'lov)!**\n📦 #{order['order_number']}\n👤 Mijoz: {user['full_name']}")
+        except: pass
+        
+    await state.clear()
+    await callback.answer()
 
 @router.callback_query(F.data == "payment_receipt")
 async def payment_receipt(callback: CallbackQuery, state: FSMContext):
+    from database import get_settings
+    settings = await get_settings()
     data = await state.get_data()
     service_price = data.get('service_price')
     
     text = (
         f"💳 **To‘lov ma’lumotlari**\n\n"
         f"💰 Summa: {service_price:,} so‘m\n"
-        f"💳 Karta raqami: `{CARD_NUMBER}`\n"
-        f"👤 Karta egasi: {CARD_OWNER}\n\n"
+        f"💳 Karta raqami: `{settings.get('card_number', 'Belgilanmagan')}`\n"
+        f"👤 Karta egasi: {settings.get('card_owner', 'Belgilanmagan')}\n\n"
         f"To‘lovni amalga oshirgandan so‘ng, **chekni (skrinshot)** yuboring.\n\n"
         f"⚠️ Diqqat: Chek aniq ko‘rinishi kerak!"
     )

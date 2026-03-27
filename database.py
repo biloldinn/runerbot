@@ -20,7 +20,9 @@ async def init_db():
             "key": "contact_info",
             "phone": "+998 90 123 45 67",
             "address": "Turon o‘quv markazi",
-            "work_hours": "09:00 - 18:00"
+            "work_hours": "09:00 - 18:00",
+            "card_number": "",
+            "card_owner": ""
         })
 
 async def get_settings():
@@ -196,7 +198,7 @@ async def create_order(user_id, service_id, total_price, payment_method, comment
         "service_name": service_name,
         "total_price": float(total_price),
         "payment_method": payment_method,
-        "payment_status": "pending",
+        "payment_status": "at_location" if payment_method == "at_location" else "pending",
         "status": "accepted" if worker_id else "new",
         "comment": comment,
         "voice_note_url": voice_note_url,
@@ -227,7 +229,10 @@ async def get_orders_by_user(user_id):
     return orders
 
 async def get_new_orders():
-    orders = await db.orders.find({"status": "new", "payment_status": "confirmed"}).sort("created_at", 1).to_list(length=None)
+    orders = await db.orders.find({
+        "status": "new", 
+        "payment_status": {"$in": ["confirmed", "at_location"]}
+    }).sort("created_at", 1).to_list(length=None)
     for o in orders:
         o['id'] = str(o['_id'])
     return orders

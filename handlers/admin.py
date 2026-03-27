@@ -19,6 +19,8 @@ class AdminStates(StatesGroup):
     waiting_service_desc = State()
     # Sozlamalar
     waiting_settings_phone = State()
+    waiting_settings_card = State()
+    waiting_settings_card_owner = State()
 
 @router.message(Command("admin"))
 async def admin_main(message: Message):
@@ -31,6 +33,7 @@ async def admin_main(message: Message):
         [InlineKeyboardButton(text="👤 Xodim qo'shish", callback_data="add_worker_bot")],
         [InlineKeyboardButton(text="🛠 Xizmat qo'shish", callback_data="add_service_bot")],
         [InlineKeyboardButton(text="⚙️ Sozlamalar", callback_data="admin_settings")],
+        [InlineKeyboardButton(text="💳 Karta sozlamalari", callback_data="admin_card_settings")],
         [InlineKeyboardButton(text="📦 Buyurtmalar", callback_data="admin_orders")],
     ])
     
@@ -172,3 +175,25 @@ async def admin_orders_list(callback: CallbackQuery):
         
     await callback.message.answer(text, parse_mode="Markdown")
     await callback.answer()
+
+@router.callback_query(F.data == "admin_card_settings")
+async def admin_card_settings_handler(callback: CallbackQuery, state: FSMContext):
+    await callback.message.answer("💳 **Karta raqamini kiriting:**\n(Masalan: 8600123456789012)")
+    await state.set_state(AdminStates.waiting_settings_card)
+    await callback.answer()
+
+@router.message(AdminStates.waiting_settings_card)
+async def process_card_num(message: Message, state: FSMContext):
+    await state.update_data(card_number=message.text)
+    await message.answer("👤 **Karta egasining ism-familiyasi:**")
+    await state.set_state(AdminStates.waiting_settings_card_owner)
+
+@router.message(AdminStates.waiting_settings_card_owner)
+async def process_card_own(message: Message, state: FSMContext):
+    data = await state.get_data()
+    await update_settings({
+        "card_number": data['card_number'],
+        "card_owner": message.text
+    })
+    await message.answer(f"✅ Karta ma'lumotlari saqlandi!\n💳 {data['card_number']}\n👤 {message.text}")
+    await state.clear()

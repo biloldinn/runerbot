@@ -35,7 +35,8 @@ def get_services_keyboard(services):
 
 def get_payment_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 Chek yuborish", callback_data="payment_receipt")],
+        [InlineKeyboardButton(text="💳 Online to'lov", callback_data="pay_online")],
+        [InlineKeyboardButton(text="📍 Borganda to'lash", callback_data="pay_at_location")],
         [InlineKeyboardButton(text="🔙 Bekor qilish", callback_data="cancel_order")]
     ])
 
