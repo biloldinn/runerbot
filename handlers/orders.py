@@ -46,6 +46,28 @@ async def start_order(callback: CallbackQuery, state: FSMContext):
     await state.set_state(OrderState.waiting_for_comment)
     await callback.answer()
 
+@router.message(OrderState.waiting_for_comment, F.voice)
+async def get_voice_comment(message: Message, state: FSMContext, bot: Bot):
+    file_id = message.voice.file_id
+    file = await bot.get_file(file_id)
+    file_path = f"voice_notes/{file_id}.ogg"
+    os.makedirs("voice_notes", exist_ok=True)
+    await bot.download_file(file.file_path, file_path)
+    
+    await state.update_data(voice_note_url=file_path, comment="[Ovozli xabar]")
+    
+    data = await state.get_data()
+    service_price = data.get('service_price')
+    
+    # To'lov usulini tanlash
+    text = (
+        f"💳 **To‘lov usulini tanlang**\n\n"
+        f"💰 Summa: {service_price:,} so‘m\n\n"
+        f"Online to'lov orqali chek yuboring yoki borganda naqd to'lashni tanlang."
+    )
+    keyboard = get_payment_keyboard()
+    await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+
 @router.message(OrderState.waiting_for_comment)
 async def get_comment(message: Message, state: FSMContext):
     if message.text == "/skip":
@@ -92,6 +114,7 @@ async def pay_at_location_handler(callback: CallbackQuery, state: FSMContext, bo
     service_id = data.get('service_id')
     service_price = data.get('service_price')
     comment = data.get('comment')
+    voice_note_url = data.get('voice_note_url')
     user = await get_user_by_telegram_id(callback.from_user.id)
     
     order, assigned_worker = await create_order(
@@ -99,7 +122,8 @@ async def pay_at_location_handler(callback: CallbackQuery, state: FSMContext, bo
         service_id=service_id,
         total_price=service_price,
         payment_method="at_location",
-        comment=comment
+        comment=comment,
+        voice_note_url=voice_note_url
     )
     
     # Notify user
@@ -117,20 +141,37 @@ async def pay_at_location_handler(callback: CallbackQuery, state: FSMContext, bo
     # Notify worker and admin
     if assigned_worker:
         try:
+            voice_text = "\n🎤 **Ovozli xabar mavjud!**" if voice_note_url else ""
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🎤 Ovozni eshitish", callback_data=f"play_voice_{order['id']}")] if voice_note_url else []
+            ])
             await bot.send_message(
                 assigned_worker['telegram_id'],
                 f"🆕 **Yangi buyurtma (Joyida to'lov)!**\n\n"
                 f"📦 #{order['order_number']}\n"
                 f"👤 Mijoz: {user['full_name']}\n"
                 f"💰 {service_price:,} so'm\n"
-                f"📝 Izoh: {comment or 'Yoq'}",
+                f"📝 Izoh: {comment or 'Yoq'}{voice_text}",
+                reply_markup=kb,
                 parse_mode="Markdown"
             )
         except: pass
         
     for admin_id in ADMIN_IDS:
         try:
-            await bot.send_message(admin_id, f"🆕 **Yangi buyurtma (Joyida to'lov)!**\n📦 #{order['order_number']}\n👤 Mijoz: {user['full_name']}")
+            voice_text = "\n🎤 **Ovozli xabar mavjud!**" if voice_note_url else ""
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🎤 Ovozni eshitish", callback_data=f"play_voice_{order['id']}")] if voice_note_url else []
+            ])
+            await bot.send_message(
+                admin_id,
+                f"🆕 **Yangi buyurtma (Joyida to'lov)!**\n\n"
+                f"📦 #{order['order_number']}\n"
+                f"👤 Mijoz: {user['full_name']}\n"
+                f"📝 Izoh: {comment or 'Yoq'}{voice_text}",
+                reply_markup=kb,
+                parse_mode="Markdown"
+            )
         except: pass
         
     await state.clear()
@@ -167,6 +208,7 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot):
     service_id = data.get('service_id')
     service_price = data.get('service_price')
     comment = data.get('comment')
+    voice_note_url = data.get('voice_note_url')
     
     # Rasmni saqlash
     photo = message.photo[-1]
@@ -184,7 +226,8 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot):
         service_id=service_id,
         total_price=service_price,
         payment_method="receipt",
-        comment=comment
+        comment=comment,
+        voice_note_url=voice_note_url
     )
     
     # Chekni saqlash
@@ -224,6 +267,13 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot):
     for admin_id in ADMIN_IDS:
         try:
             worker_name = assigned_worker['full_name'] if assigned_worker else "Biriktirilmagan"
+            voice_text = "\n🎤 **Ovozli xabar mavjud!**" if voice_note_url else ""
+            
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📜 Chekni ko'rish", callback_data=f"check_receipt_{order['id']}")] if payment_method == "receipt" else [],
+                [InlineKeyboardButton(text="🎤 Ovozni eshitish", callback_data=f"play_voice_{order['id']}")] if voice_note_url else []
+            ])
+            
             await bot.send_message(
                 admin_id,
                 f"🆕 **Yangi buyurtma!**\n\n"
@@ -231,8 +281,8 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot):
                 f"👤 Mijoz: {user['full_name']}\n"
                 f"💰 {service_price:,} so'm\n"
                 f"👨‍💻 Hodim: {worker_name}\n"
-                f"📝 Izoh: {comment or 'Yoq'}\n\n"
-                f"Chek: /check_{order['id']}",
+                f"📝 Izoh: {comment or 'Yoq'}{voice_text}",
+                reply_markup=kb,
                 parse_mode="Markdown"
             )
         except:

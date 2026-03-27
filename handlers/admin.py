@@ -197,3 +197,30 @@ async def process_card_own(message: Message, state: FSMContext):
     })
     await message.answer(f"✅ Karta ma'lumotlari saqlandi!\n💳 {data['card_number']}\n👤 {message.text}")
     await state.clear()
+
+@router.callback_query(F.data.startswith("play_voice_"))
+async def play_voice_handler(callback: CallbackQuery, bot: Bot):
+    order_id = callback.data.split("_")[2]
+    order = await get_order_by_id(order_id)
+    if order and order['voice_note_url']:
+        from aiogram.types import FSInputFile
+        await callback.message.answer_voice(FSInputFile(order['voice_note_url']), caption=f"🎤 #{order['order_number']} ovozli izohi")
+    else:
+        await callback.answer("Ovozli xabar topilmadi!")
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("check_receipt_"))
+async def check_receipt_handler(callback: CallbackQuery, bot: Bot):
+    order_id = callback.data.split("_")[2]
+    order = await get_order_by_id(order_id)
+    if order and order['receipt_url']:
+        from aiogram.types import FSInputFile
+        text = f"📝 **Buyurtma #{order['order_number']}**\n👤 Mijoz: {order['user_name']}\n💰 Summa: {order['total_price']:,} so'm"
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"confirm_pay_{order_id}")],
+            [InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"cancel_pay_{order_id}")]
+        ])
+        await callback.message.answer_photo(FSInputFile(order['receipt_url']), caption=text, reply_markup=keyboard, parse_mode="Markdown")
+    else:
+        await callback.answer("Chek topilmadi!")
+    await callback.answer()
