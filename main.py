@@ -12,7 +12,10 @@ from aiogram.types import BotCommand
 from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN, ADMIN_IDS
-from database import init_db, get_all_users
+from database import (
+    init_db, get_all_users, check_and_lock_instance, 
+    update_heartbeat, release_lock
+)
 from handlers import start, services, orders, worker, admin
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime
@@ -51,8 +54,6 @@ async def set_commands(bot: Bot):
 from aiogram.client.default import DefaultBotProperties
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
-
-from database import init_db, check_and_lock_instance, update_heartbeat, release_lock
 
 async def heartbeat_loop():
     while True:
