@@ -1,6 +1,7 @@
 import os
 from aiogram import Router, F, Bot
-from aiogram.types import Message, CallbackQuery, FSInputFile
+from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from datetime import datetime
@@ -365,35 +366,47 @@ async def back_to_orders(callback: CallbackQuery):
 
 @router.message(OrderState.waiting_for_final_amount)
 async def process_final_amount(message: Message, state: FSMContext):
-    # To'langan summani saqlash 
+    # To'langan summani saqlash va baholashni so'rash
     text = (
-        "📈 **Rahmat! Ma'lumot qabul qilindi.**\n\n"
-        "--- ReKlaMa ---\n"
-        "🎓 **Turon o'quv markazi** — Sifatli va ishonchli ta'lim!\n"
-        "Bizni tanlaganingiz uchun tashakkur bildiramiz!\n\n"
-        "📍 Bizning kanal: @Turon_Oquv\n"
-        "--- ✨ ---\n\n"
-        "Iltimos, xizmat ko'rsatgan hodimni baholang:"
+        "<b>🌟 Rahmat! Ma'lumot qabul qilindi.</b>\n\n"
+        "Xizmatimiz sifatini qanday baholaysiz? Bahoingiz biz uchun juda muhim! ⭐"
     )
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="⭐", callback_data="rate_1"),
-            InlineKeyboardButton(text="⭐⭐", callback_data="rate_2"),
-            InlineKeyboardButton(text="⭐⭐⭐", callback_data="rate_3"),
-            InlineKeyboardButton(text="⭐⭐⭐⭐", callback_data="rate_4"),
-            InlineKeyboardButton(text="⭐⭐⭐⭐⭐", callback_data="rate_5")
+            InlineKeyboardButton(text="⭐ 1", callback_data="rate_1"),
+            InlineKeyboardButton(text="⭐ 2", callback_data="rate_2"),
+            InlineKeyboardButton(text="⭐ 3", callback_data="rate_3"),
+            InlineKeyboardButton(text="⭐ 4", callback_data="rate_4"),
+            InlineKeyboardButton(text="⭐ 5", callback_data="rate_5")
         ]
     ])
     
-    await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+    await message.answer(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
     await state.set_state(OrderState.waiting_for_rating)
 
 @router.callback_query(F.data.startswith("rate_"))
 async def rate_order(callback: CallbackQuery, state: FSMContext):
-    await callback.answer("⭐ Raxmat! Bahoingiz qabul qilindi.", show_alert=True)
-    await callback.message.edit_text(
-        "✨ **Bahoingiz uchun rahmat!**\n\n"
-        "Turon o'quv markazi bilan yanada yuksaklikka! 🚀"
+    # Bahoni qabul qilish va boy reklama xabarini yuborish
+    rating = callback.data.split("_")[1]
+    await callback.answer(f"⭐ {rating} baho uchun rahmat!", show_alert=True)
+    
+    adv_text = (
+        "<b>🎓 Turon o'quv markazi — Sifatli ta'lim garovi!</b>\n\n"
+        "Bizni tanlaganingiz uchun tashakkur! Bizda quyidagi yo'nalishlar mavjud:\n"
+        "💻 — <b>Kompyuter savodxonligi</b>\n"
+        "🎨 — <b>Grafik va 3D dizayn</b>\n"
+        "🌐 — <b>Frontend & Backend dasturlash</b>\n"
+        "🤖 — <b>Robototexnika</b>\n\n"
+        "<i>Kelajagingizni biz bilan yanada yorqinroq quring! 🚀</i>\n\n"
+        "📞 Tel: +998 90 123 45 67\n"
+        "📍 Bizning manzil: Markaziy bino."
     )
+    
+    markup = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📢 Telegram Kanal", url="https://t.me/Dasturchi_bt")],
+        [InlineKeyboardButton(text="🎓 Kursga yozilish", url="https://t.me/Dasturchi_bt")]
+    ])
+
+    await callback.message.edit_text(adv_text, reply_markup=markup, parse_mode=ParseMode.HTML)
     await state.clear()

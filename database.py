@@ -13,6 +13,34 @@ async def init_db():
     await db.orders.create_index("order_number", unique=True)
     await db.admin_users.create_index("username", unique=True)
     await db.worker_stats.create_index([("worker_id", 1), ("date", 1)], unique=True)
+    await db.locks.create_index("name", unique=True)
+
+async def check_and_lock_instance(instance_name="bot_main"):
+    """Boshqa bot ishlayotganini tekshiradi va lock qo'yadi"""
+    # 30 sekunddan oshgan locklarni ochilgan deb hisoblaymiz (dead lock prevention)
+    expiry_time = datetime.now() - timedelta(seconds=120)
+    
+    # Eskirgan lockni o'chirish
+    await db.locks.delete_many({"name": instance_name, "last_heartbeat": {"$lt": expiry_time}})
+    
+    try:
+        await db.locks.insert_one({
+            "name": instance_name,
+            "last_heartbeat": datetime.now(),
+            "started_at": datetime.now()
+        })
+        return True
+    except:
+        return False
+
+async def update_heartbeat(instance_name="bot_main"):
+    await db.locks.update_one(
+        {"name": instance_name},
+        {"$set": {"last_heartbeat": datetime.now()}}
+    )
+
+async def release_lock(instance_name="bot_main"):
+    await db.locks.delete_many({"name": instance_name})
     
     # Initialize default settings
     if not await db.settings.find_one({"key": "contact_info"}):

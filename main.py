@@ -52,29 +52,52 @@ from aiogram.client.default import DefaultBotProperties
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
+from database import init_db, check_and_lock_instance, update_heartbeat, release_lock
+
+async def heartbeat_loop():
+    while True:
+        await update_heartbeat()
+        await asyncio.sleep(60)
+
 async def main():
     # Initialize database
     await init_db()
     
-    # Include routers
-    dp.include_router(start.router)
-    dp.include_router(services.router)
-    dp.include_router(orders.router)
-    dp.include_router(worker.router)
-    dp.include_router(admin.router)
-    
-    # Setup scheduler
-    scheduler = AsyncIOScheduler(timezone='Asia/Tashkent')
-    scheduler.add_job(send_daily_notification, 'cron', hour=8, minute=0, args=[bot])
-    scheduler.start()
+    # Conflict prevention: Check if another instance is running
+    is_locked = await check_and_lock_instance()
+    if not is_locked:
+        logging.error("CRITICAL: Another bot instance is already running! Exiting to prevent conflict.")
+        return
 
-    # Set commands
-    await set_commands(bot)
-    
-    # Start polling
-    print("Bot ishga tushdi!")
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+    try:
+        # Start heartbeat
+        asyncio.create_task(heartbeat_loop())
+        
+        # Include routers
+        dp.include_router(start.router)
+        dp.include_router(services.router)
+        dp.include_router(orders.router)
+        dp.include_router(worker.router)
+        dp.include_router(admin.router)
+        
+        # Setup scheduler
+        scheduler = AsyncIOScheduler(timezone='Asia/Tashkent')
+        scheduler.add_job(send_daily_notification, 'cron', hour=8, minute=0, args=[bot])
+        scheduler.start()
+
+        # Set commands
+        await set_commands(bot)
+        
+        # Start polling
+        logging.info("--- TURON BOT STARTED ---")
+        await bot.delete_webhook(drop_pending_updates=True)
+        await dp.start_polling(bot)
+    finally:
+        await release_lock()
+        logging.info("--- TURON BOT STOPPED ---")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        pass
