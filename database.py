@@ -404,3 +404,27 @@ async def get_admin_by_id(user_id):
         return await db.admin_users.find_one({"_id": ObjectId(user_id)})
     except:
         return None
+
+# ============ YANGILIKLAR VA E'LONLAR ============
+
+async def get_all_news(limit=10):
+    news = await db.news.find().sort("created_at", -1).limit(limit).to_list(length=limit)
+    for item in news:
+        item['id'] = str(item['_id'])
+    return news
+
+async def add_news(title, content, author="Admin"):
+    return await db.news.insert_one({
+        "title": title,
+        "content": content,
+        "author": author,
+        "created_at": datetime.now()
+    })
+
+async def delete_news(news_id):
+    from bson.objectid import ObjectId
+    try:
+        await db.news.delete_one({"_id": ObjectId(news_id)})
+        return True
+    except:
+        return False
