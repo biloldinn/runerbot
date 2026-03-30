@@ -78,6 +78,11 @@ def get_all_workers():
         w['id'] = str(w['_id'])
     return workers
 
+def find_user_by_username(username):
+    if not username: return None
+    username = username.replace("@", "")
+    return db.users.find_one({"username": username})
+
 def add_worker(telegram_id, username, full_name, phone):
     db.users.update_one(
         {"telegram_id": telegram_id},

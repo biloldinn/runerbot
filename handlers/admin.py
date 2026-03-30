@@ -77,17 +77,22 @@ async def admin_main_back(callback: CallbackQuery):
 # --- Xodim qo'shish (FSM) ---
 @router.callback_query(F.data == "add_worker_bot")
 async def start_add_worker(callback: CallbackQuery, state: FSMContext):
-    await callback.message.answer("➡️ Xodimning <b>Telegram ID</b> sini yuboring:", parse_mode="HTML")
-    await state.set_state(AdminStates.waiting_worker_id)
+    await callback.message.answer("➡️ Xodimning <b>Username</b>ini yuboring (masalan: @username):", parse_mode="HTML")
+    await state.set_state(AdminStates.waiting_worker_username)
     await callback.answer()
 
-@router.message(AdminStates.waiting_worker_id)
-async def process_worker_id(message: Message, state: FSMContext):
-    if not message.text.isdigit():
-        await message.answer("❌ Telegram ID raqamlardan iborat bo'lishi kerak!")
+@router.message(AdminStates.waiting_worker_username)
+async def process_worker_username(message: Message, state: FSMContext):
+    from database import find_user_by_username
+    username = message.text.replace("@", "")
+    user = await find_user_by_username(username)
+    
+    if not user:
+        await message.answer("❌ Bu username bilan foydalanuvchi topilmadi!\n\nAvval xodim botga kirib /start bosishi kerak.")
         return
-    await state.update_data(worker_id=int(message.text))
-    await message.answer("➡️ Xodimning <b>Ism-familiyasini</b> yuboring:", parse_mode="HTML")
+        
+    await state.update_data(worker_id=user['telegram_id'], worker_username=user.get('username'))
+    await message.answer(f"✅ Foydalanuvchi topildi: <b>{user['full_name']}</b>\n\n➡️ Endi xodimning <b>familiyasi va ismini</b> kiriting:", parse_mode="HTML")
     await state.set_state(AdminStates.waiting_worker_name)
 
 @router.message(AdminStates.waiting_worker_name)
@@ -99,8 +104,8 @@ async def process_worker_name(message: Message, state: FSMContext):
 @router.message(AdminStates.waiting_worker_phone)
 async def process_worker_phone(message: Message, state: FSMContext):
     data = await state.get_data()
-    await add_worker(data['worker_id'], None, data['worker_name'], message.text)
-    await message.answer(f"✅ Xodim qo'shildi: <b>{data['worker_name']}</b>", parse_mode="HTML")
+    await add_worker(data['worker_id'], data.get('worker_username'), data['worker_name'], message.text)
+    await message.answer(f"✅ Xodim muvaffaqiyatli qo'shildi: <b>{data['worker_name']}</b>", parse_mode="HTML")
     await state.clear()
 
 # --- Xizmat qo'shish (FSM) ---
