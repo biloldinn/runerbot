@@ -10,7 +10,7 @@ router = Router()
 
 class AdminStates(StatesGroup):
     # Xodim qo'shish holatlari
-    waiting_worker_id = State()
+    waiting_worker_username = State()
     waiting_worker_name = State()
     waiting_worker_phone = State()
     # Xizmat qo'shish holatlari
@@ -133,8 +133,9 @@ async def process_service_price(message: Message, state: FSMContext):
 @router.message(AdminStates.waiting_service_desc)
 async def process_service_desc(message: Message, state: FSMContext):
     data = await state.get_data()
+    from database import add_service
     await add_service(data['s_name'], message.text, data['s_price'], 60, "Umumiy")
-    await message.answer(f"✅ Xizmat qo'shildi: <b>{data['s_name']}</b>", parse_mode="HTML")
+    await message.answer(f"✅ Xizmat qo'shildi: <b>{data['s_name']}</b>\n💰 Narxi: {data['s_price']:,} so'm", parse_mode="HTML")
     await state.clear()
 
 # --- Sozlamalar ---
@@ -142,7 +143,7 @@ async def process_service_desc(message: Message, state: FSMContext):
 async def admin_settings(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer(
         "⚙️ <b>Sozlamalar bo'limi</b>\n\n"
-        "Yangi kontakt telefon raqamini yuboring (masalan: +998901234567):",
+        "Yangi kontakt telefon raqamini yuboring (masalan: +7):",
         parse_mode="HTML"
     )
     await state.set_state(AdminStates.waiting_settings_phone)

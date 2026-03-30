@@ -18,4 +18,8 @@ CARD_OWNER = os.getenv("CARD_OWNER", "TURON OQUV MARKAZI")
 # Bot sozlamalari
 BOT_NAME = "Turon Kompyuter Xizmati"
 BOT_DESCRIPTION = "Kompyuter xizmatlariga oldindan buyurtma berish tizimi"
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://turon-zakas.vercel.app")
+_env_url = os.getenv("WEBAPP_URL", "")
+if "vercel.app" in _env_url:
+    WEBAPP_URL = _env_url
+else:
+    WEBAPP_URL = "https://turon-zakas.vercel.app"
