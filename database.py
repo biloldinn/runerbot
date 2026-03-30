@@ -6,7 +6,7 @@ from config import MONGODB_URI, DATABASE_NAME
 client = pymongo.MongoClient(MONGODB_URI)
 db = client[DATABASE_NAME]
 
-def init_db():
+async def init_db():
     """MongoDB indekslarini yaratish (Sync)"""
     db.users.create_index("telegram_id", unique=True)
     db.orders.create_index("order_number", unique=True)
@@ -424,3 +424,38 @@ async def release_lock():
     import socket
     hostname = socket.gethostname()
     db.locks.delete_one({"type": "bot_poll", "hostname": hostname})
+
+def get_new_orders():
+    orders = list(db.orders.find({"status": "new"}).sort("created_at", -1))
+    for o in orders:
+        o['id'] = str(o['_id'])
+    return orders
+
+def get_worker_orders(worker_id, status):
+    orders = list(db.orders.find({"worker_id": worker_id, "status": status}).sort("created_at", -1))
+    for o in orders:
+        o['id'] = str(o['_id'])
+    return orders
+
+def update_worker_stats(worker_id, amount):
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    db.worker_stats.update_one(
+        {"worker_id": worker_id, "date": today},
+        {"$inc": {"orders_count": 1, "total_amount": float(amount)}},
+        upsert=True
+    )
+
+def get_worker_today_stats(worker_id):
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    stat = db.worker_stats.find_one({"worker_id": worker_id, "date": today})
+    if not stat:
+        return {"orders_count": 0, "total_amount": 0}
+    return stat
+
+def get_worker_history(worker_id, days=30):
+    start_date = datetime.now() - timedelta(days=days)
+    history = list(db.worker_stats.find({
+        "worker_id": worker_id, 
+        "date": {"$gte": start_date}
+    }).sort("date", -1))
+    return history
