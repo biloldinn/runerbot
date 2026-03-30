@@ -54,9 +54,10 @@ async def worker_accept_order(callback: CallbackQuery, bot: Bot):
         await bot.send_message(
             order['user_id'],
             f"✅ <b>Buyurtma #{order['order_number']} qabul qilindi!</b>\n\n"
-            f"👨💻 Hodim: {worker['full_name']}\n"
-            f"🕐 Tez orada siz bilan bog‘lanadi.\n\n"
-            f"📞 Aloqa: +998{worker['phone']} (agar kerak bo‘lsa)",
+            f"👨💻 Hodim: <b>{worker['full_name']}</b>\n"
+            f"📍 Turon o'quv markaziga kelganingizda <b>{worker['full_name']}</b> deb so'rang, sizga yordam beradi.\n\n"
+            f"🕐 Tez orada siz bilan bog‘lanadi.\n"
+            f"📞 Tel: {worker.get('phone', 'Noma\'lum')}",
             parse_mode="HTML"
         )
     except:

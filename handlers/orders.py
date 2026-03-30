@@ -18,7 +18,9 @@ from config import ADMIN_IDS, CARD_NUMBER, CARD_OWNER
 router = Router()
 
 class OrderState(StatesGroup):
-    waiting_for_comment = State()
+    waiting_for_media = State()
+    waiting_for_pickup = State()
+    waiting_for_payment_method = State()
     waiting_for_receipt = State()
     waiting_for_final_amount = State()
     waiting_for_rating = State()
@@ -32,64 +34,134 @@ async def start_order(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Xizmat topilmadi!")
         return
     
-    await state.update_data(service_id=service_id, service_price=service['price'])
-    
-    text = (
-        f"📦 <b>Buyurtma berish</b>\n\n"
-        f"🛠 Xizmat: {service['name']}\n"
-        f"💰 Narxi: {service['price']:,} so‘m\n\n"
-        f"📝 Qo‘shimcha ma’lumot yozishingiz mumkin:\n"
-        f"(masalan: kompyuter modeli, maxsus talablar)\n\n"
-        f"Yoki /skip - o‘tkazib yuborish"
+    await state.update_data(
+        service_id=service_id, 
+        service_price=service['price'],
+        photos=[],
+        voice_note_url=None,
+        comment=None
     )
     
-    await callback.message.edit_text(text, parse_mode="HTML")
-    await state.set_state(OrderState.waiting_for_comment)
+    text = (
+        f"📦 <b>Buyurtma: {service['name']}</b>\n"
+        f"💰 Narxi: {service['price']:,} so‘m\n\n"
+        f"Iltimos, buyurtma haqida ma'lumot bering:\n"
+        f"📸 <b>Rasm (JPG)</b>, 🎤 <b>Ovozli xabar</b> yoki 📝 <b>Matn</b> yuboring.\n\n"
+        "Barcha ma'lumotlarni yuborgach <b>\"✅ Buyurtmani tasdiqlash\"</b> tugmasini bosing."
+    )
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Buyurtmani tasdiqlash", callback_data="confirm_media")]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await state.set_state(OrderState.waiting_for_media)
     await callback.answer()
 
-@router.message(OrderState.waiting_for_comment, F.voice)
-async def get_voice_comment(message: Message, state: FSMContext, bot: Bot):
-    file_id = message.voice.file_id
-    file = await bot.get_file(file_id)
-    file_path = f"voice_notes/{file_id}.ogg"
-    os.makedirs("voice_notes", exist_ok=True)
-    await bot.download_file(file.file_path, file_path)
-    
-    await state.update_data(voice_note_url=file_path, comment="[Ovozli xabar]")
-    
+@router.message(OrderState.waiting_for_media)
+async def process_media(message: Message, state: FSMContext, bot: Bot):
     data = await state.get_data()
-    service_price = data.get('service_price')
     
-    # To'lov usulini tanlash
-    text = (
-        f"💳 <b>To‘lov usulini tanlang</b>\n\n"
-        f"💰 Summa: {service_price:,} so‘m\n\n"
-        f"Online to'lov orqali chek yuboring yoki borganda naqd to'lashni tanlang."
-    )
-    keyboard = get_payment_keyboard()
-    await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+    if message.photo:
+        file_id = message.photo[-1].file_id
+        file = await bot.get_file(file_id)
+        os.makedirs("order_photos", exist_ok=True)
+        file_path = f"order_photos/{file_id}.jpg"
+        await bot.download_file(file.file_path, file_path)
+        
+        photos = data.get('photos', [])
+        photos.append(file_path)
+        await state.update_data(photos=photos)
+        await message.answer("📸 Rasm qo'shildi! Yana biror narsa yuborasizmi? (Ovozli xabar yoki matn)")
+        
+    elif message.voice:
+        file_id = message.voice.file_id
+        file = await bot.get_file(file_id)
+        os.makedirs("voice_notes", exist_ok=True)
+        file_path = f"voice_notes/{file_id}.ogg"
+        await bot.download_file(file.file_path, file_path)
+        await state.update_data(voice_note_url=file_path)
+        await message.answer("🎤 Ovozli xabar yuborildi!")
+        
+    elif message.text:
+        await state.update_data(comment=message.text)
+        await message.answer("📝 Izoh saqlandi!")
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Buyurtmani tasdiqlash", callback_data="confirm_media")]
+    ])
+    
+    await message.answer("Mabodo ma'lumotlar tugagan bo'lsa, davom eting:", reply_markup=kb)
 
-@router.message(OrderState.waiting_for_comment)
-async def get_comment(message: Message, state: FSMContext):
-    if message.text == "/skip":
-        comment = None
-    else:
-        comment = message.text
-    
-    await state.update_data(comment=comment)
+@router.callback_query(F.data == "confirm_media", OrderState.waiting_for_media)
+async def confirm_media(callback: CallbackQuery, state: FSMContext):
+    text = (
+        "📅 <b>Qachon olib ketasiz?</b>\n\n"
+        "Iltimos, qay kuni va soat nechada tayyor bo'lishi kerakligini yozing.\n"
+        "Masalan: <i>Dushanba, soat 14:00 da</i>"
+    )
+    await callback.message.edit_text(text, parse_mode="HTML")
+    await state.set_state(OrderState.waiting_for_pickup)
+    await callback.answer()
+
+@router.message(OrderState.waiting_for_pickup)
+async def process_pickup(message: Message, state: FSMContext):
+    await state.update_data(pickup_info=message.text)
     
     data = await state.get_data()
     service_price = data.get('service_price')
     
-    # To'lov usulini tanlash
     text = (
         f"💳 <b>To‘lov usulini tanlang</b>\n\n"
         f"💰 Summa: {service_price:,} so‘m\n\n"
-        f"Online to'lov orqali chek yuboring yoki borganda naqd to'lashni tanlang."
+        f"Online to'lov yoki borganda naqd to'lashni tanlang."
     )
-    
     keyboard = get_payment_keyboard()
     await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+    await state.set_state(OrderState.waiting_for_payment_method)
+
+@router.callback_query(F.data == "pay_at_location", OrderState.waiting_for_payment_method)
+async def pay_at_location_final(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    data = await state.get_data()
+    user = await get_user_by_telegram_id(callback.from_user.id)
+    
+    order, worker = await create_order(
+        user_id=user['telegram_id'],
+        service_id=data.get('service_id'),
+        total_price=data.get('service_price'),
+        payment_method="at_location",
+        comment=data.get('comment'),
+        voice_note_url=data.get('voice_note_url'),
+        photos=data.get('photos'),
+        pickup_day=data.get('pickup_info') # Temporary simplified
+    )
+    
+    worker_text = f"\n👨‍💻 Hodim: {worker['full_name']}" if worker else ""
+    await callback.message.edit_text(
+        "✅ <b>Buyurtma yuborildi!</b>\n\n"
+        f"📦 Raqam: <code>{order['order_number']}</code>\n"
+        f"📅 Muddat: {data.get('pickup_info')}"
+        f"{worker_text}\n\n"
+        "Admin tasdiqlashi bilan xabar yuboramiz.",
+        parse_mode="HTML"
+    )
+    
+    # Notify worker
+    if worker:
+        try:
+            await bot.send_message(
+                worker['telegram_id'],
+                f"🆕 <b>Yangi buyurtma (Joyida to'lov)!</b>\n\n"
+                f"📦 #{order['order_number']}\n"
+                f"👤 Mijoz: {user['full_name']}\n"
+                f"📅 Muddat: {data.get('pickup_info')}\n\n"
+                "Iltimos, buyurtmani qabul qiling.", 
+                parse_mode="HTML"
+            )
+        except: pass
+        
+    await state.clear()
+    await callback.answer()
 
 @router.callback_query(F.data == "pay_online")
 async def pay_online_handler(callback: CallbackQuery, state: FSMContext):
