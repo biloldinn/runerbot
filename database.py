@@ -37,12 +37,6 @@ def get_settings():
         }
     return settings
 
-def get_all_users():
-    users = list(db.users.find())
-    for u in users:
-        u['id'] = str(u['_id'])
-    return users
-
 def update_settings(data):
     db.settings.update_one(
         {"type": "general"},
@@ -75,6 +69,12 @@ def get_or_create_user(telegram_id, username=None, full_name=None):
 def get_user_by_telegram_id(telegram_id):
     return db.users.find_one({"telegram_id": telegram_id})
 
+def get_all_users():
+    users = list(db.users.find())
+    for u in users:
+        u['id'] = str(u['_id'])
+    return users
+
 def get_all_workers():
     workers = list(db.users.find({"role": "worker", "is_active": True}))
     for w in workers:
@@ -97,6 +97,12 @@ def add_worker(telegram_id, username, full_name, phone):
             "is_active": True
         }},
         upsert=True
+    )
+
+def remove_worker(telegram_id):
+    db.users.update_one(
+        {"telegram_id": telegram_id},
+        {"$set": {"role": "user", "is_active": False}}
     )
 
 def update_worker_balance(worker_id, amount):
@@ -193,8 +199,26 @@ def get_order_by_id(order_id):
     except:
         return None
 
+def get_all_orders():
+    orders = list(db.orders.find().sort("created_at", -1))
+    for o in orders:
+        o['id'] = str(o['_id'])
+    return orders
+
 def get_orders_by_user(user_id):
     orders = list(db.orders.find({"user_id": user_id}).sort("created_at", -1))
+    for o in orders:
+        o['id'] = str(o['_id'])
+    return orders
+
+def get_new_orders():
+    orders = list(db.orders.find({"status": "new"}).sort("created_at", -1))
+    for o in orders:
+        o['id'] = str(o['_id'])
+    return orders
+
+def get_worker_orders(worker_id, status):
+    orders = list(db.orders.find({"worker_id": worker_id, "status": status}).sort("created_at", -1))
     for o in orders:
         o['id'] = str(o['_id'])
     return orders
@@ -230,6 +254,12 @@ def update_order_status(order_id, status):
     
     if status == "completed" and order.get('payment_method') == "at_location" and order.get('worker_id'):
         update_worker_balance(order['worker_id'], order['total_price'])
+
+def assign_order_to_worker(order_id, worker_id):
+    db.orders.update_one(
+        {"_id": ObjectId(order_id)},
+        {"$set": {"worker_id": worker_id, "status": "accepted", "accepted_at": datetime.now()}}
+    )
 
 def rate_order(order_id, rating):
     order = get_order_by_id(order_id)
@@ -273,10 +303,9 @@ def get_worker_history(worker_id, days=30):
         h['id'] = str(h['_id'])
     return history
 
-# ============ CONFLICT PREVENTION (LOCKING) ============
+# ============ CONFLICT PREVENTION ============
 
 async def check_and_lock_instance(instance_id="local"):
-    """Conflict prevention bypassed for migration fixes"""
     return True
 
 async def update_heartbeat():
