@@ -110,14 +110,22 @@ async def process_pickup(message: Message, state: FSMContext):
     
     data = await state.get_data()
     service_price = data.get('service_price')
+    photos_count = len(data.get('photos', []))
+    has_voice = "Bor" if data.get('voice_note_url') else "Yo‘q"
     
-    text = (
-        f"💳 <b>To‘lov usulini tanlang</b>\n\n"
-        f"💰 Summa: {service_price:,} so‘m\n\n"
-        f"Online to'lov yoki borganda naqd to'lashni tanlang."
+    summary = (
+        f"📝 <b>Buyurtma xulosasi:</b>\n\n"
+        f"🛠 Xizmat: {data.get('service_id')}\n"
+        f"💰 Narx: {service_price:,} so‘m\n"
+        f"📅 Muddat: {message.text}\n"
+        f"📸 Rasmlar: {photos_count} ta\n"
+        f"🎤 Ovozli xabar: {has_voice}\n"
+        f"💬 Izoh: {data.get('comment') or 'Yo‘q'}\n\n"
+        "Barchasi to'g'rimi? To'lov usulini tanlang:"
     )
+    
     keyboard = get_payment_keyboard()
-    await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+    await message.answer(summary, reply_markup=keyboard, parse_mode="HTML")
     await state.set_state(OrderState.waiting_for_payment_method)
 
 @router.callback_query(F.data == "pay_at_location", OrderState.waiting_for_payment_method)
