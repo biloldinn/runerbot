@@ -27,7 +27,7 @@ async def send_daily_notification(bot: Bot):
     if datetime.now().weekday() == 6:
         return # Yakshanba kuni yubormaslik
         
-    users = await get_all_users()
+    users = get_all_users()
     text = (
         "☀️ <b>Assalomu alaykum!</b>\n\n"
         "🏢 Turon kompyuter xizmatlari o'z ishini boshladi!\n"
