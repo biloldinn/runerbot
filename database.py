@@ -162,24 +162,22 @@ def delete_service(service_id):
 
 # ============ ORDER FUNKSIYALARI ============
 
-def create_order(user_id, service_id, total_price, payment_method, comment=None, voice_note_url=None):
+async def create_order(user_id, service_id, total_price, payment_method, comment=None, voice_note_url=None, photos=None, documents=None, pickup_day=None):
     from random import choice
     
-    # Generate unique order number
-    import random
-    order_number = f"T{random.randint(10000, 99999)}"
-    
-    user = get_user_by_telegram_id(user_id)
-    service = get_service_by_id(service_id)
+    # Xizmat nomini olish
+    service = await get_service_by_id(service_id)
     service_name = service['name'] if service else "Boshqa xizmat"
-
-    # Round-robin worker assignment (simplest: choose random active worker)
+    
+    # Hodimni biriktirish (Round-robin)
     workers = get_all_workers()
     assigned_worker = choice(workers) if workers else None
     worker_id = assigned_worker['telegram_id'] if assigned_worker else None
-
+    
+    user = get_user_by_telegram_id(user_id)
+    
     order_doc = {
-        "order_number": order_number,
+        "order_number": db.orders.count_documents({}) + 1001,
         "user_id": user_id,
         "user_name": user['full_name'],
         "user_phone": user.get('phone'),
@@ -187,10 +185,13 @@ def create_order(user_id, service_id, total_price, payment_method, comment=None,
         "service_name": service_name,
         "total_price": float(total_price),
         "payment_method": payment_method,
-        "payment_status": "pending" if payment_method == "receipt" else "at_location",
+        "payment_status": "pending",
         "status": "new",
         "comment": comment,
         "voice_note_url": voice_note_url,
+        "photos": photos or [],
+        "documents": documents or [],
+        "pickup_day": pickup_day,
         "worker_id": worker_id,
         "rating": None,
         "created_at": datetime.now(),

@@ -36,8 +36,10 @@ async def start_order(callback: CallbackQuery, state: FSMContext):
     
     await state.update_data(
         service_id=service_id, 
+        service_name=service['name'],
         service_price=service['price'],
         photos=[],
+        documents=[],
         voice_note_url=None,
         comment=None
     )
@@ -46,14 +48,39 @@ async def start_order(callback: CallbackQuery, state: FSMContext):
         f"📦 <b>Buyurtma: {service['name']}</b>\n"
         f"💰 Narxi: {service['price']:,} so‘m\n\n"
         f"Iltimos, buyurtma haqida ma'lumot bering:\n"
-        f"📸 <b>Rasm (JPG)</b>, 🎤 <b>Ovozli xabar</b> yoki 📝 <b>Matn</b> yuboring.\n\n"
-        "Barcha ma'lumotlarni yuborgach <b>\"✅ Buyurtmani tasdiqlash\"</b> tugmasini bosing."
+        f"📸 <b>Rasm (JPG)</b>, 📄 <b>PDF/Hujjat</b>, 🎤 <b>Ovozli xabar</b> yoki 📝 <b>Matn</b> yuboring.\n\n"
+        "Barcha ma'lumotlarni yuborgach <b>\"✅ Davom etish\"</b> tugmasini bosing."
     )
     
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Buyurtmani tasdiqlash", callback_data="confirm_media")]
+        [InlineKeyboardButton(text="✅ Davom etish", callback_data="confirm_media")],
+        [InlineKeyboardButton(text="🗑 Ma'lumotlarni tozalash", callback_data="clear_media")]
     ])
     
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await state.set_state(OrderState.waiting_for_media)
+    await callback.answer()
+
+@router.callback_query(F.data == "service_other")
+async def start_other_service(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(
+        service_id="other", 
+        service_name="Boshqa xizmat",
+        service_price=0,
+        photos=[],
+        documents=[],
+        voice_note_url=None,
+        comment=None
+    )
+    text = (
+        "🆕 <b>Boshqa xizmat turi</b>\n\n"
+        "Qanday xizmat kerek? Ma'lumotlarni yozing yoki fayllarni (Rasm, PDF, Ovozli xabar) yuboring.\n\n"
+        "Xizmat narxi ma'lumotlar o'rganib chiqilgandan so'ng xabar qilinadi."
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Ma'lumotlarni yakunlash", callback_data="confirm_media")],
+        [InlineKeyboardButton(text="❌ Hammasini o'chirish", callback_data="clear_media")]
+    ])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await state.set_state(OrderState.waiting_for_media)
     await callback.answer()
@@ -72,7 +99,19 @@ async def process_media(message: Message, state: FSMContext, bot: Bot):
         photos = data.get('photos', [])
         photos.append(file_path)
         await state.update_data(photos=photos)
-        await message.answer("📸 Rasm qo'shildi! Yana biror narsa yuborasizmi? (Ovozli xabar yoki matn)")
+        txt = "📸 Rasm qo'shildi!"
+        
+    elif message.document:
+        file_id = message.document.file_id
+        file = await bot.get_file(file_id)
+        os.makedirs("order_docs", exist_ok=True)
+        file_path = f"order_docs/{message.document.file_name}"
+        await bot.download_file(file.file_path, file_path)
+        
+        docs = data.get('documents', [])
+        docs.append(file_path)
+        await state.update_data(documents=docs)
+        txt = f"📄 Hujjat ({message.document.file_name}) qo'shildi!"
         
     elif message.voice:
         file_id = message.voice.file_id
@@ -81,17 +120,26 @@ async def process_media(message: Message, state: FSMContext, bot: Bot):
         file_path = f"voice_notes/{file_id}.ogg"
         await bot.download_file(file.file_path, file_path)
         await state.update_data(voice_note_url=file_path)
-        await message.answer("🎤 Ovozli xabar yuborildi!")
+        txt = "🎤 Ovozli xabar yuborildi!"
         
     elif message.text:
         await state.update_data(comment=message.text)
-        await message.answer("📝 Izoh saqlandi!")
-    
+        txt = "📝 Matnli izoh saqlandi!"
+    else:
+        return
+
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Buyurtmani tasdiqlash", callback_data="confirm_media")]
+        [InlineKeyboardButton(text="✅ Davom etish", callback_data="confirm_media")],
+        [InlineKeyboardButton(text="🗑 Hammasini qaytadan yuklash", callback_data="clear_media")]
     ])
     
-    await message.answer("Mabodo ma'lumotlar tugagan bo'lsa, davom eting:", reply_markup=kb)
+    await message.answer(f"{txt}\nYana biror narsa yuborasizmi yoki davom etamiz?", reply_markup=kb)
+
+@router.callback_query(F.data == "clear_media", OrderState.waiting_for_media)
+async def clear_media_handler(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(photos=[], documents=[], voice_note_url=None, comment=None)
+    await callback.message.answer("🗑 Barcha yuklangan ma'lumotlar o'chirildi. Qaytadan yuborishingiz mumkin.")
+    await callback.answer()
 
 @router.callback_query(F.data == "confirm_media", OrderState.waiting_for_media)
 async def confirm_media(callback: CallbackQuery, state: FSMContext):
@@ -286,88 +334,67 @@ async def cancel_order(callback: CallbackQuery, state: FSMContext):
 @router.message(OrderState.waiting_for_receipt, F.photo)
 async def get_receipt(message: Message, state: FSMContext, bot: Bot):
     data = await state.get_data()
-    service_id = data.get('service_id')
-    service_price = data.get('service_price')
-    comment = data.get('comment')
-    voice_note_url = data.get('voice_note_url')
     
-    # Rasmni saqlash
     photo = message.photo[-1]
     file = await bot.get_file(photo.file_id)
     file_path = f"receipts/{photo.file_id}.jpg"
     os.makedirs("receipts", exist_ok=True)
     await bot.download_file(file.file_path, file_path)
     
-    # Foydalanuvchini olish
     user = await get_user_by_telegram_id(message.from_user.id)
     
-    # Buyurtma yaratish (round-robin bilan)
     order, assigned_worker = await create_order(
-        user_id=user['telegram_id'], # Use telegram_id consistently
-        service_id=service_id,
-        total_price=service_price,
+        user_id=user['telegram_id'],
+        service_id=data.get('service_id'),
+        total_price=data.get('service_price'),
         payment_method="receipt",
-        comment=comment,
-        voice_note_url=voice_note_url
+        comment=data.get('comment'),
+        voice_note_url=data.get('voice_note_url'),
+        photos=data.get('photos'),
+        documents=data.get('documents'),
+        pickup_day=data.get('pickup_info')
     )
     
-    # Chekni saqlash
     await update_order_payment_status(order['id'], "pending", file_path)
     
-    # Hodim haqida xabar
     worker_info = f"\n👨‍💻 Hodim: {assigned_worker['full_name']}" if assigned_worker else ""
-    
     await message.answer(
         "✅ <b>Buyurtma qabul qilindi!</b>\n\n"
         f"📦 Buyurtma raqami: <code>{order['order_number']}</code>\n"
-        f"💰 Summa: {service_price:,} so'm"
+        f"💰 Summa: {data.get('service_price'):,} so'm"
         f"{worker_info}\n\n"
-        "⏳ To'lov tasdiqlanishi kutilmoqda.\n"
-        "Admin tomonidan tasdiqlangandan so'ng sizga xabar keladi.",
+        "⏳ To'lov tasdiqlanishi kutilmoqda.",
         parse_mode="HTML"
     )
     
-    # Biriktirilgan hodimga bildirishnoma
     if assigned_worker:
         try:
+            doc_count = len(data.get('documents', []))
+            doc_text = f"\n📄 <b>Hujjatlar: {doc_count} ta</b>" if doc_count else ""
             await bot.send_message(
                 assigned_worker['telegram_id'],
                 f"🆕 <b>Sizga yangi buyurtma biriktirildi!</b>\n\n"
                 f"📦 #{order['order_number']}\n"
                 f"👤 Mijoz: {user['full_name']}\n"
-                f"📞 Tel: {user.get('phone', 'Noma\'lum')}\n"
-                f"💰 {service_price:,} so'm\n"
-                f"📝 Izoh: {comment or 'Yoq'}\n\n"
-                f"To'lov tasdiqlangandan so'ng ishlashni boshlang.",
+                f"💰 {data.get('service_price'):,} so'm\n"
+                f"📅 Muddat: {data.get('pickup_info')}{doc_text}",
                 parse_mode="HTML"
             )
-        except:
-            pass
+        except: pass
     
-    # Adminlarga xabar yuborish
     for admin_id in ADMIN_IDS:
         try:
             worker_name = assigned_worker['full_name'] if assigned_worker else "Biriktirilmagan"
-            voice_text = "\n🎤 <b>Ovozli xabar mavjud!</b>" if voice_note_url else ""
-            
-            kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📜 Chekni ko'rish", callback_data=f"check_receipt_{order['id']}")] if payment_method == "receipt" else [],
-                [InlineKeyboardButton(text="🎤 Ovozni eshitish", callback_data=f"play_voice_{order['id']}")] if voice_note_url else []
-            ])
-            
             await bot.send_message(
                 admin_id,
-                f"🆕 <b>Yangi buyurtma!</b>\n\n"
+                f"🆕 <b>Yangi buyurtma (Online)!</b>\n\n"
                 f"📦 #{order['order_number']}\n"
                 f"👤 Mijoz: {user['full_name']}\n"
-                f"💰 {service_price:,} so'm\n"
                 f"👨‍💻 Hodim: {worker_name}\n"
-                f"📝 Izoh: {comment or 'Yoq'}{voice_text}",
-                reply_markup=kb,
+                f"💰 {data.get('service_price'):,} so'm",
                 parse_mode="HTML"
             )
-        except:
-            pass
+        except: pass
     
     await state.clear()
 
