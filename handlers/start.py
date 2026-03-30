@@ -98,9 +98,10 @@ async def contact_info(message: Message):
     settings = get_settings()
     text = (
         "<b>📞 Aloqa ma'lumotlari</b>\n\n"
-        f"📍 Manzil: {settings.get('address')}\n"
-        f"☎️ Telefon: {settings.get('phone')}\n"
-        f"🕰 Ish vaqti: {settings.get('work_hours')}\n\n"
+        f"📍 Manzil: {settings.get('address', 'Turon o\'quv markazi')}\n"
+        f"☎️ Telefon: {settings.get('phone', '+998 90 123 45 67')}\n"
+        f"📅 Ish kunlari: {settings.get('work_days', 'Dushanba - Shanba')}\n"
+        f"🕰 Ish vaqti: {settings.get('work_hours', '09:00 - 18:00')}\n\n"
         "Savollaringiz bo'lsa, adminga murojaat qiling."
     )
     await message.answer(text, parse_mode="HTML")
