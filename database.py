@@ -124,6 +124,10 @@ def get_all_services(active_only=True):
         s['id'] = str(s['_id'])
     return services
 
+async def clear_lock_and_run_local(bot_id):
+    await db.instance_lock.delete_many({"instance_id": {"$exists": True}})
+    return await check_and_lock_instance(bot_id)
+
 def get_service_by_id(service_id):
     try:
         service = db.services.find_one({"_id": ObjectId(service_id)})

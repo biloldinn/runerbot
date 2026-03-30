@@ -64,9 +64,16 @@ async def main():
     # Initialize database
     await init_db()
     
-    # Conflict prevention: Check if another instance is running
-    is_locked = await check_and_lock_instance()
-    if not is_locked:
+    # Conflict prevention: Check if another instance is running (Retry 10 times)
+    lock_secured = False
+    for i in range(10):
+        if await check_and_lock_instance():
+            lock_secured = True
+            break
+        logging.info(f"Lock attempt {i+1} failed. Retrying...")
+        await asyncio.sleep(2)
+
+    if not lock_secured:
         logging.error("CRITICAL: Another bot instance is already running! Exiting to prevent conflict.")
         return
 

@@ -144,7 +144,7 @@ async def process_service_desc(message: Message, state: FSMContext):
 async def admin_settings(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer(
         "⚙️ <b>Sozlamalar bo'limi</b>\n\n"
-        "Yangi kontakt telefon raqamini yuboring (masalan: +998905418414
+        "Yangi kontakt telefon raqamini yuboring (masalan: +998905418414):",
         parse_mode="HTML"
     )
     await state.set_state(AdminStates.waiting_settings_phone)
