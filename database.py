@@ -373,3 +373,54 @@ def delete_news(news_id):
         return True
     except:
         return False
+def get_all_users():
+    users = list(db.users.find())
+    for u in users:
+        u['id'] = str(u['_id'])
+    return users
+
+# ============ CONFLICT PREVENTION (LOCKING) ============
+
+async def check_and_lock_instance():
+    """Boshqa instance ishlayotganini tekshirish va lock qo'yish"""
+    import socket
+    hostname = socket.gethostname()
+    now = datetime.now()
+    
+    lock = db.locks.find_one({"type": "bot_poll"})
+    
+    if lock:
+        # Agar lock 120 soniyadan ko'p vaqt oldin yangilangan bo'lsa, u eskirdi deb hisoblaymiz
+        if now - lock['last_heartbeat'] > timedelta(seconds=120):
+            db.locks.update_one(
+                {"type": "bot_poll"},
+                {"$set": {"hostname": hostname, "last_heartbeat": now, "status": "active"}}
+            )
+            return True
+        else:
+            # Boshqa biri ishlayapti
+            return False
+    else:
+        # Yangi lock yaratish
+        db.locks.insert_one({
+            "type": "bot_poll",
+            "hostname": hostname,
+            "last_heartbeat": now,
+            "status": "active"
+        })
+        return True
+
+async def update_heartbeat():
+    """Lockni yangilab turish"""
+    import socket
+    hostname = socket.gethostname()
+    db.locks.update_one(
+        {"type": "bot_poll", "hostname": hostname},
+        {"$set": {"last_heartbeat": datetime.now()}}
+    )
+
+async def release_lock():
+    """Lockni bo'shatish"""
+    import socket
+    hostname = socket.gethostname()
+    db.locks.delete_one({"type": "bot_poll", "hostname": hostname})
