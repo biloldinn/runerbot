@@ -37,6 +37,12 @@ def get_settings():
         }
     return settings
 
+def get_all_users():
+    users = list(db.users.find())
+    for u in users:
+        u['id'] = str(u['_id'])
+    return users
+
 def update_settings(data):
     db.settings.update_one(
         {"type": "general"},
