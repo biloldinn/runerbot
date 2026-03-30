@@ -13,6 +13,28 @@ async def init_db():
     db.admin_users.create_index("username", unique=True)
     db.worker_stats.create_index([("worker_id", 1), ("date", 1)], unique=True)
     
+    # ============ SOZLAMALAR ============
+
+async def get_settings():
+    settings = db.settings.find_one({"type": "general"})
+    if not settings:
+        return {
+            "phone": "+998 90 123 45 67",
+            "address": "Turon o'quv markazi",
+            "work_hours": "09:00 - 18:00",
+            "card_number": "8600 1234 5678 9012",
+            "card_owner": "TURON OQUV MARKAZI"
+        }
+    return settings
+
+async def update_settings(data):
+    db.settings.update_one(
+        {"type": "general"},
+        {"$set": data},
+        upsert=True
+    )
+    return True
+
     # Check if default admin exists
     admin = db.admin_users.find_one({"username": "admin"})
     if not admin:
