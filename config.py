@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
+BOT_TOKEN = "8735699118:AAFwDVP2TX6p8qaQPZ5NRTRy8O-dJRpx73Q"
 ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS", "123456789").split(",")))
 
 MONGODB_URI = "mongodb+srv://bilol:bilol006@cluster0.hdolzub.mongodb.net/turon_zakas?retryWrites=true&w=majority&appName=Cluster0"
