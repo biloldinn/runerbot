@@ -4,7 +4,8 @@ from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from database import get_order_by_id, update_order_payment_status, add_worker, add_service, get_all_services, update_settings
-from config import ADMIN_IDS, WEBAPP_URL
+from config import ADMIN_IDS
+WEBAPP_URL = "https://turon-zakas.vercel.app"
 
 router = Router()
 
@@ -143,7 +144,7 @@ async def process_service_desc(message: Message, state: FSMContext):
 async def admin_settings(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer(
         "⚙️ <b>Sozlamalar bo'limi</b>\n\n"
-        "Yangi kontakt telefon raqamini yuboring (masalan: +7):",
+        "Yangi kontakt telefon raqamini yuboring (masalan: +998905418414
         parse_mode="HTML"
     )
     await state.set_state(AdminStates.waiting_settings_phone)

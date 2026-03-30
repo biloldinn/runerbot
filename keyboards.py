@@ -1,5 +1,6 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-from config import WEBAPP_URL
+# Majburiy Vercel Link (Railwayni butkul tozalash)
+WEBAPP_URL = "https://turon-zakas.vercel.app"
 
 def get_main_keyboard(is_admin=False):
     buttons = [
