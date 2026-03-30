@@ -62,21 +62,14 @@ async def heartbeat_loop():
 
 async def main():
     # Initialize database
+    from database import init_db
     await init_db()
     
-    # Conflict prevention: Check if another instance is running (Retry 10 times)
-    lock_secured = False
-    for i in range(10):
-        if await check_and_lock_instance():
-            lock_secured = True
-            break
-        logging.info(f"Lock attempt {i+1} failed. Retrying...")
-        await asyncio.sleep(2)
+    # FORCED OVERRIDE: Disabled for token migration
+    logging.info("Multi-instance lock bypassed for migration.")
 
-    if not lock_secured:
-        logging.error("CRITICAL: Another bot instance is already running! Exiting to prevent conflict.")
-        return
-
+    logging.info("Bot started successfully (Polling mode active)")
+    
     try:
         # Start heartbeat
         asyncio.create_task(heartbeat_loop())
