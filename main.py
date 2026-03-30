@@ -29,7 +29,7 @@ async def send_daily_notification(bot: Bot):
         
     users = await get_all_users()
     text = (
-        "☀️ **Assalomu alaykum!**\n\n"
+        "☀️ <b>Assalomu alaykum!</b>\n\n"
         "🏢 Turon kompyuter xizmatlari o'z ishini boshladi!\n"
         "Bugun soat 18:00 ga qadar xizmatingizdamiz.\n\n"
         "💻 Xizmatlarimizdan foydalanish uchun /start bosing."
@@ -37,7 +37,7 @@ async def send_daily_notification(bot: Bot):
     
     for user in users:
         try:
-            await bot.send_message(user['telegram_id'], text, parse_mode="Markdown")
+            await bot.send_message(user['telegram_id'], text, parse_mode="HTML")
             await asyncio.sleep(0.05) # Telegram limitlaridan oshib ketmaslik uchun
         except Exception:
             continue

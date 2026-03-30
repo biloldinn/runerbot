@@ -18,10 +18,10 @@ async def show_services(message: Message):
     
     keyboard = get_services_keyboard(services)
     await message.answer(
-        "📋 **Bizning xizmatlar:**\n\n"
+        "📋 <b>Bizning xizmatlar:</b>\n\n"
         "Kerakli xizmatni tanlang:",
         reply_markup=keyboard,
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 @router.callback_query(F.data.startswith("service_"))
@@ -34,9 +34,9 @@ async def service_detail(callback: CallbackQuery):
         return
     
     text = (
-        f"🛠 **{service['name']}**\n\n"
+        f"🛠 <b>{service['name']}</b>\n\n"
         f"📝 {service['description'] or 'Tavsif mavjud emas'}\n\n"
-        f"💰 Narxi: **{service['price']:,} so‘m**\n"
+        f"💰 Narxi: <b>{service['price']:,} so‘m</b>\n"
         f"⏱ Vaqt: {service['duration']} daqiqa\n"
         f"📂 Kategoriya: {service['category'] or 'Umumiy'}\n\n"
         f"Buyurtma berish uchun quyidagi tugmani bosing:"
@@ -47,7 +47,7 @@ async def service_detail(callback: CallbackQuery):
         [InlineKeyboardButton(text="🔙 Orqaga", callback_data="back_to_services")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     await callback.answer()
 
 from handlers.orders import OrderState
@@ -61,9 +61,9 @@ async def service_other_handler(callback: CallbackQuery, state: FSMContext):
         service_price=0
     )
     await callback.message.edit_text(
-        "📝 **Sizga qanday xizmat kerak?**\n\n"
+        "📝 <b>Sizga qanday xizmat kerak?</b>\n\n"
         "Iltimos, muammoni yoki kerakli xizmatni batafsil yozib yuboring (yoki ovozli xabar yuboring):",
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     await state.set_state(OrderState.waiting_for_comment)
     await callback.answer()
@@ -73,8 +73,8 @@ async def back_to_services(callback: CallbackQuery):
     services = await get_all_services()
     keyboard = get_services_keyboard(services)
     await callback.message.edit_text(
-        "📋 **Bizning xizmatlar:**\n\nKerakli xizmatni tanlang:",
+        "📋 <b>Bizning xizmatlar:</b>\n\nKerakli xizmatni tanlang:",
         reply_markup=keyboard,
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     await callback.answer()

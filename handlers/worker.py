@@ -29,10 +29,10 @@ async def worker_new_orders(message: Message):
     
     keyboard = get_worker_orders_keyboard(orders, "new")
     await message.answer(
-        f"🆕 **Yangi buyurtmalar ({len(orders)} ta)**\n\n"
+        f"🆕 <b>Yangi buyurtmalar ({len(orders)} ta)</b>\n\n"
         "Qabul qilmoqchi bo‘lgan buyurtmani tanlang:",
         reply_markup=keyboard,
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 @router.callback_query(F.data.startswith("worker_accept_"))
@@ -53,11 +53,11 @@ async def worker_accept_order(callback: CallbackQuery, bot: Bot):
     try:
         await bot.send_message(
             order['user_id'],
-            f"✅ **Buyurtma #{order['order_number']} qabul qilindi!**\n\n"
+            f"✅ <b>Buyurtma #{order['order_number']} qabul qilindi!</b>\n\n"
             f"👨💻 Hodim: {worker['full_name']}\n"
             f"🕐 Tez orada siz bilan bog‘lanadi.\n\n"
             f"📞 Aloqa: +998{worker['phone']} (agar kerak bo‘lsa)",
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     except:
         pass
@@ -68,20 +68,20 @@ async def worker_accept_order(callback: CallbackQuery, bot: Bot):
             await bot.send_message(
                 admin_id,
                 f"✅ Buyurtma #{order['order_number']} hodim {worker['full_name']} ga biriktirildi.",
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except:
             pass
     
     await callback.message.edit_text(
-        f"✅ **Buyurtma #{order['order_number']} qabul qilindi!**\n\n"
+        f"✅ <b>Buyurtma #{order['order_number']} qabul qilindi!</b>\n\n"
         f"👤 Mijoz: {order['user_name']}\n"
         f"📞 Tel: {order['user_phone']}\n"
         f"🛠 Xizmat: {order['service_name']}\n"
         f"💰 {order['total_price']:,} so‘m\n"
         f"📝 Izoh: {order['comment'] or 'Yo‘q'}\n\n"
         f"⏳ Holat: Jarayonda",
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     await callback.answer()
 
@@ -102,9 +102,9 @@ async def worker_in_progress(message: Message):
     
     keyboard = get_worker_orders_keyboard(orders, "progress")
     await message.answer(
-        f"🔧 **Jarayondagi buyurtmalar ({len(orders)} ta)**",
+        f"🔧 <b>Jarayondagi buyurtmalar ({len(orders)} ta)</b>",
         reply_markup=keyboard,
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 @router.callback_query(F.data.startswith("worker_complete_"))
@@ -127,10 +127,10 @@ async def worker_complete_order(callback: CallbackQuery, bot: Bot):
     try:
         await bot.send_message(
             order['user_id'],
-            f"✅ **Buyurtmangiz #{order['order_number']} yakunlandi!**\n\n"
+            f"✅ <b>Buyurtmangiz #{order['order_number']} yakunlandi!</b>\n\n"
             "Iltimos, ushbu buyurtma uchun qancha to'lov qildingiz?\n"
-            "**Aniq summani yozing:**",
-            parse_mode="Markdown"
+            "<b>Aniq summani yozing:</b>",
+            parse_mode="HTML"
         )
         # State ni o'rnatish uchun dispatcherdan foydalanishimiz kerak yoki state ni qo'lda boshqarish
         # Lekin osonroq yo'li: stateni user_id va chat_id bo'yicha o'rnatish
@@ -151,7 +151,7 @@ async def worker_complete_order(callback: CallbackQuery, bot: Bot):
     await callback.message.answer(
         f"✅ Buyurtma #{order['order_number']} bajarildi!\n\n"
         f"Mijozga to'lov summasini so'rab xabar yuborildi.",
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     
     # Mijozga kechiktirilgan xabar
@@ -160,11 +160,11 @@ async def worker_complete_order(callback: CallbackQuery, bot: Bot):
         try:
             await bot.send_message(
                 order['user_id'],
-                f"✅ **Buyurtma #{order['order_number']} tayyor!**\n\n"
+                f"✅ <b>Buyurtma #{order['order_number']} tayyor!</b>\n\n"
                 f"📍 Manzil: Turon o‘quv markazi\n"
                 f"🕐 Tayyor bo‘lgan vaqt: {datetime.now().strftime('%H:%M')}\n\n"
                 f"Kelib olishingiz mumkin.",
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except:
             pass
@@ -187,16 +187,16 @@ async def worker_completed(message: Message):
         await message.answer("📭 Bajarilgan buyurtmalar yo‘q.")
         return
     
-    text = f"✅ **Bajarilgan buyurtmalar**\n\n"
-    text += f"📊 **Bugungi statistika:**\n"
+    text = f"✅ <b>Bajarilgan buyurtmalar</b>\n\n"
+    text += f"📊 <b>Bugungi statistika:</b>\n"
     text += f"📦 Buyurtmalar: {today_stats['orders_count']} ta\n"
     text += f"💰 Daromad: {today_stats['total_amount']:,} so‘m\n\n"
-    text += f"**Oxirgi 5 ta buyurtma:**\n"
+    text += f"<b>Oxirgi 5 ta buyurtma:</b>\n"
     
     for order in orders[:5]:
         text += f"\n• #{order['order_number']} | {order['service_name']} | {order['total_price']:,} so‘m"
     
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(text, parse_mode="HTML")
 
 @router.message(F.text == "📊 Mening statistikam")
 async def worker_stats(message: Message):
@@ -213,14 +213,14 @@ async def worker_stats(message: Message):
     total_amount = sum(h['total_amount'] for h in history)
     
     text = (
-        f"📊 **Mening statistikam**\n\n"
+        f"📊 <b>Mening statistikam</b>\n\n"
         f"👤 {user['full_name']}\n\n"
-        f"**Bugun:**\n"
+        f"<b>Bugun:</b>\n"
         f"📦 {today_stats['orders_count']} ta buyurtma\n"
         f"💰 {today_stats['total_amount']:,} so‘m\n\n"
-        f"**Umumiy (30 kun):**\n"
+        f"<b>Umumiy (30 kun):</b>\n"
         f"📦 {total_orders} ta buyurtma\n"
         f"💰 {total_amount:,} so‘m\n"
     )
     
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(text, parse_mode="HTML")

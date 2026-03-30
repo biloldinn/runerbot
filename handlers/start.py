@@ -33,19 +33,19 @@ async def cmd_start(message: Message, state: FSMContext):
     # Agar foydalanuvchi hodim bo'lsa
     if user.get('role') == 'worker':
         await message.answer(
-            "🖥 **TURON O‘QUV MARKAZI**\n👨💻 Hodim paneli\n\n"
+            "🖥 <b>TURON O‘QUV MARKAZI</b>\n👨💻 Hodim paneli\n\n"
             "Siz Turon o‘quv markazi hodimisiz!\n"
             "Xizmat ko‘rsatishga tayyormisiz?",
             reply_markup=get_worker_keyboard(is_admin=is_admin),
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     else:
         await message.answer(
-            f"🖥 **TURON O‘QUV MARKAZI**\nKompyuter xizmati\n\n"
+            f"🖥 <b>TURON O‘QUV MARKAZI</b>\nKompyuter xizmati\n\n"
             f"👋 Assalomu alaykum, {user['full_name']}!\n\n"
             f"Kompyuter xizmatlarimizdan foydalaning.",
             reply_markup=get_main_keyboard(is_admin=is_admin),
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
 
 @router.message(RegisterState.waiting_for_name)
@@ -78,11 +78,11 @@ async def get_phone(message: Message, state: FSMContext):
     
     if user.get('role') == 'worker':
         await message.answer(
-            "🖥 **TURON O‘QUV MARKAZI**\n👨💻 Hodim paneli\n\n"
+            "🖥 <b>TURON O‘QUV MARKAZI</b>\n👨💻 Hodim paneli\n\n"
             "Siz Turon o‘quv markazi hodimisiz!\n"
             "Xizmat ko‘rsatishga tayyormisiz?",
             reply_markup=get_worker_keyboard(is_admin=is_admin),
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     else:
         await message.answer(
@@ -97,18 +97,18 @@ async def get_phone(message: Message, state: FSMContext):
 async def contact_info(message: Message):
     settings = await get_settings()
     text = (
-        "📞 **Aloqa ma'lumotlari**\n\n"
+        "<b>📞 Aloqa ma'lumotlari</b>\n\n"
         f"📍 Manzil: {settings.get('address')}\n"
         f"☎️ Telefon: {settings.get('phone')}\n"
         f"🕰 Ish vaqti: {settings.get('work_hours')}\n\n"
         "Savollaringiz bo'lsa, adminga murojaat qiling."
     )
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(text, parse_mode="HTML")
 
 @router.message(F.text == "✍️ Taklif va shikoyatlar")
 async def support_info(message: Message):
     text = (
-        "✍️ **Taklif va shikoyatlar bo'limi**\n\n"
+        "<b>✍️ Taklif va shikoyatlar bo'limi</b>\n\n"
         "Shikoyat yoki takliflaringiz bo'lsa, @Dasturchi_bt ga murojaat qiling.\n"
         "Sizning fikringiz biz uchun muhim!"
     )
@@ -116,7 +116,7 @@ async def support_info(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✍️ Bog'lanish", url="https://t.me/Dasturchi_bt")]
     ])
-    await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+    await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
 
 @router.message(Command("cancel"))
 async def cmd_cancel(message: Message, state: FSMContext):

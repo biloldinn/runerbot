@@ -35,7 +35,7 @@ async def start_order(callback: CallbackQuery, state: FSMContext):
     await state.update_data(service_id=service_id, service_price=service['price'])
     
     text = (
-        f"📦 **Buyurtma berish**\n\n"
+        f"📦 <b>Buyurtma berish</b>\n\n"
         f"🛠 Xizmat: {service['name']}\n"
         f"💰 Narxi: {service['price']:,} so‘m\n\n"
         f"📝 Qo‘shimcha ma’lumot yozishingiz mumkin:\n"
@@ -43,7 +43,7 @@ async def start_order(callback: CallbackQuery, state: FSMContext):
         f"Yoki /skip - o‘tkazib yuborish"
     )
     
-    await callback.message.edit_text(text, parse_mode="Markdown")
+    await callback.message.edit_text(text, parse_mode="HTML")
     await state.set_state(OrderState.waiting_for_comment)
     await callback.answer()
 
@@ -62,12 +62,12 @@ async def get_voice_comment(message: Message, state: FSMContext, bot: Bot):
     
     # To'lov usulini tanlash
     text = (
-        f"💳 **To‘lov usulini tanlang**\n\n"
+        f"💳 <b>To‘lov usulini tanlang</b>\n\n"
         f"💰 Summa: {service_price:,} so‘m\n\n"
         f"Online to'lov orqali chek yuboring yoki borganda naqd to'lashni tanlang."
     )
     keyboard = get_payment_keyboard()
-    await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+    await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
 
 @router.message(OrderState.waiting_for_comment)
 async def get_comment(message: Message, state: FSMContext):
@@ -83,13 +83,13 @@ async def get_comment(message: Message, state: FSMContext):
     
     # To'lov usulini tanlash
     text = (
-        f"💳 **To‘lov usulini tanlang**\n\n"
+        f"💳 <b>To‘lov usulini tanlang</b>\n\n"
         f"💰 Summa: {service_price:,} so‘m\n\n"
         f"Online to'lov orqali chek yuboring yoki borganda naqd to'lashni tanlang."
     )
     
     keyboard = get_payment_keyboard()
-    await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+    await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
 
 @router.callback_query(F.data == "pay_online")
 async def pay_online_handler(callback: CallbackQuery, state: FSMContext):
@@ -99,13 +99,13 @@ async def pay_online_handler(callback: CallbackQuery, state: FSMContext):
     service_price = data.get('service_price')
     
     text = (
-        f"💳 **Online To‘lov**\n\n"
+        f"💳 <b>Online To‘lov</b>\n\n"
         f"💰 Summa: {service_price:,} so‘m\n"
-        f"💳 Karta: `{settings.get('card_number', 'Belgilanmagan')}`\n"
+        f"💳 Karta: <code>{settings.get('card_number', 'Belgilanmagan')}</code>\n"
         f"👤 Egasi: {settings.get('card_owner', 'Belgilanmagan')}\n\n"
-        f"To‘lovdan so‘ng **chekni (rasm)** yuboring."
+        f"To‘lovdan so‘ng <b>chekni (rasm)</b> yuboring."
     )
-    await callback.message.edit_text(text, parse_mode="Markdown")
+    await callback.message.edit_text(text, parse_mode="HTML")
     await state.set_state(OrderState.waiting_for_receipt)
     await callback.answer()
 
@@ -130,48 +130,48 @@ async def pay_at_location_handler(callback: CallbackQuery, state: FSMContext, bo
     # Notify user
     worker_info = f"\n👨‍💻 Hodim: {assigned_worker['full_name']}" if assigned_worker else ""
     await callback.message.edit_text(
-        "✅ **Buyurtma qabul qilindi!**\n\n"
-        f"📦 Buyurtma raqami: `{order['order_number']}`\n"
+        "✅ <b>Buyurtma qabul qilindi!</b>\n\n"
+        f"📦 Buyurtma raqami: <code>{order['order_number']}</code>\n"
         f"💰 Summa: {service_price:,} so'm\n"
         "📍 To'lov: Xizmat ko'rsatilgan joyda."
         f"{worker_info}\n\n"
         "Xizmat ko'rsatish boshlanishi bilanoq sizga bildirishnoma keladi.",
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     
     # Notify worker and admin
     if assigned_worker:
         try:
-            voice_text = "\n🎤 **Ovozli xabar mavjud!**" if voice_note_url else ""
+            voice_text = "\n🎤 <b>Ovozli xabar mavjud!</b>" if voice_note_url else ""
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🎤 Ovozni eshitish", callback_data=f"play_voice_{order['id']}")] if voice_note_url else []
             ])
             await bot.send_message(
                 assigned_worker['telegram_id'],
-                f"🆕 **Yangi buyurtma (Joyida to'lov)!**\n\n"
+                f"🆕 <b>Yangi buyurtma (Joyida to'lov)!</b>\n\n"
                 f"📦 #{order['order_number']}\n"
                 f"👤 Mijoz: {user['full_name']}\n"
                 f"💰 {service_price:,} so'm\n"
                 f"📝 Izoh: {comment or 'Yoq'}{voice_text}",
                 reply_markup=kb,
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except: pass
         
     for admin_id in ADMIN_IDS:
         try:
-            voice_text = "\n🎤 **Ovozli xabar mavjud!**" if voice_note_url else ""
+            voice_text = "\n🎤 <b>Ovozli xabar mavjud!</b>" if voice_note_url else ""
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🎤 Ovozni eshitish", callback_data=f"play_voice_{order['id']}")] if voice_note_url else []
             ])
             await bot.send_message(
                 admin_id,
-                f"🆕 **Yangi buyurtma (Joyida to'lov)!**\n\n"
+                f"🆕 <b>Yangi buyurtma (Joyida to'lov)!</b>\n\n"
                 f"📦 #{order['order_number']}\n"
                 f"👤 Mijoz: {user['full_name']}\n"
                 f"📝 Izoh: {comment or 'Yoq'}{voice_text}",
                 reply_markup=kb,
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except: pass
         
@@ -186,15 +186,15 @@ async def payment_receipt(callback: CallbackQuery, state: FSMContext):
     service_price = data.get('service_price')
     
     text = (
-        f"💳 **To‘lov ma’lumotlari**\n\n"
+        f"💳 <b>To‘lov ma’lumotlari</b>\n\n"
         f"💰 Summa: {service_price:,} so‘m\n"
-        f"💳 Karta raqami: `{settings.get('card_number', 'Belgilanmagan')}`\n"
+        f"💳 Karta raqami: <code>{settings.get('card_number', 'Belgilanmagan')}</code>\n"
         f"👤 Karta egasi: {settings.get('card_owner', 'Belgilanmagan')}\n\n"
-        f"To‘lovni amalga oshirgandan so‘ng, **chekni (skrinshot)** yuboring.\n\n"
+        f"To‘lovni amalga oshirgandan so‘ng, <b>chekni (skrinshot)</b> yuboring.\n\n"
         f"⚠️ Diqqat: Chek aniq ko‘rinishi kerak!"
     )
     
-    await callback.message.edit_text(text, parse_mode="Markdown")
+    await callback.message.edit_text(text, parse_mode="HTML")
     await callback.answer()
 
 @router.callback_query(F.data == "cancel_order")
@@ -238,13 +238,13 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot):
     worker_info = f"\n👨‍💻 Hodim: {assigned_worker['full_name']}" if assigned_worker else ""
     
     await message.answer(
-        "✅ **Buyurtma qabul qilindi!**\n\n"
-        f"📦 Buyurtma raqami: `{order['order_number']}`\n"
+        "✅ <b>Buyurtma qabul qilindi!</b>\n\n"
+        f"📦 Buyurtma raqami: <code>{order['order_number']}</code>\n"
         f"💰 Summa: {service_price:,} so'm"
         f"{worker_info}\n\n"
         "⏳ To'lov tasdiqlanishi kutilmoqda.\n"
         "Admin tomonidan tasdiqlangandan so'ng sizga xabar keladi.",
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     
     # Biriktirilgan hodimga bildirishnoma
@@ -252,14 +252,14 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot):
         try:
             await bot.send_message(
                 assigned_worker['telegram_id'],
-                f"🆕 **Sizga yangi buyurtma biriktirildi!**\n\n"
+                f"🆕 <b>Sizga yangi buyurtma biriktirildi!</b>\n\n"
                 f"📦 #{order['order_number']}\n"
                 f"👤 Mijoz: {user['full_name']}\n"
                 f"📞 Tel: {user.get('phone', 'Noma\'lum')}\n"
                 f"💰 {service_price:,} so'm\n"
                 f"📝 Izoh: {comment or 'Yoq'}\n\n"
                 f"To'lov tasdiqlangandan so'ng ishlashni boshlang.",
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except:
             pass
@@ -268,7 +268,7 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot):
     for admin_id in ADMIN_IDS:
         try:
             worker_name = assigned_worker['full_name'] if assigned_worker else "Biriktirilmagan"
-            voice_text = "\n🎤 **Ovozli xabar mavjud!**" if voice_note_url else ""
+            voice_text = "\n🎤 <b>Ovozli xabar mavjud!</b>" if voice_note_url else ""
             
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📜 Chekni ko'rish", callback_data=f"check_receipt_{order['id']}")] if payment_method == "receipt" else [],
@@ -277,14 +277,14 @@ async def get_receipt(message: Message, state: FSMContext, bot: Bot):
             
             await bot.send_message(
                 admin_id,
-                f"🆕 **Yangi buyurtma!**\n\n"
+                f"🆕 <b>Yangi buyurtma!</b>\n\n"
                 f"📦 #{order['order_number']}\n"
                 f"👤 Mijoz: {user['full_name']}\n"
                 f"💰 {service_price:,} so'm\n"
                 f"👨‍💻 Hodim: {worker_name}\n"
                 f"📝 Izoh: {comment or 'Yoq'}{voice_text}",
                 reply_markup=kb,
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except:
             pass
@@ -302,9 +302,9 @@ async def my_orders(message: Message):
     
     keyboard = get_orders_keyboard(orders)
     await message.answer(
-        "📋 **Sizning buyurtmalaringiz:**",
+        "📋 <b>Sizning buyurtmalaringiz:</b>",
         reply_markup=keyboard,
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 @router.callback_query(F.data.startswith("myorder_"))
@@ -331,7 +331,7 @@ async def my_order_detail(callback: CallbackQuery):
     }.get(order['payment_status'], order['payment_status'])
     
     text = (
-        f"📦 **Buyurtma #{order['order_number']}**\n\n"
+        f"📦 <b>Buyurtma #{order['order_number']}</b>\n\n"
         f"🛠 Xizmat: {order['service_name']}\n"
         f"📝 Izoh: {order['comment'] or 'Yo‘q'}\n\n"
         f"📊 Holat: {status_text}\n"
@@ -343,7 +343,7 @@ async def my_order_detail(callback: CallbackQuery):
         text += f"✅ Bajarilgan vaqt: {order['completed_at']}\n"
     
     keyboard = get_order_detail_keyboard(order)
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     await callback.answer()
 
 @router.callback_query(F.data == "back_to_orders")
@@ -358,9 +358,9 @@ async def back_to_orders(callback: CallbackQuery):
     
     keyboard = get_orders_keyboard(orders)
     await callback.message.edit_text(
-        "📋 **Sizning buyurtmalaringiz:**",
+        "📋 <b>Sizning buyurtmalaringiz:</b>",
         reply_markup=keyboard,
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     await callback.answer()
 
@@ -386,10 +386,20 @@ async def process_final_amount(message: Message, state: FSMContext):
     await state.set_state(OrderState.waiting_for_rating)
 
 @router.callback_query(F.data.startswith("rate_"))
-async def rate_order(callback: CallbackQuery, state: FSMContext):
-    # Bahoni qabul qilish va boy reklama xabarini yuborish
-    rating = callback.data.split("_")[1]
-    await callback.answer(f"⭐ {rating} baho uchun rahmat!", show_alert=True)
+async def rate_order_handler(callback: CallbackQuery, state: FSMContext):
+    from database import rate_order, get_settings
+    
+    data = await state.get_data()
+    # Find the last completed order for this user to rate
+    user_orders = await get_orders_by_user(callback.from_user.id)
+    if user_orders:
+        last_order = user_orders[0]
+        rating = callback.data.split("_")[1]
+        await rate_order(last_order['id'], rating)
+        await callback.answer(f"⭐ {rating} baho uchun rahmat!", show_alert=True)
+    
+    settings = await get_settings()
+    phone = settings.get('phone', '+998 90 123 45 67')
     
     adv_text = (
         "<b>🎓 Turon o'quv markazi — Sifatli ta'lim garovi!</b>\n\n"
@@ -399,7 +409,7 @@ async def rate_order(callback: CallbackQuery, state: FSMContext):
         "🌐 — <b>Frontend & Backend dasturlash</b>\n"
         "🤖 — <b>Robototexnika</b>\n\n"
         "<i>Kelajagingizni biz bilan yanada yorqinroq quring! 🚀</i>\n\n"
-        "📞 Tel: +998 90 123 45 67\n"
+        f"📞 Tel: {phone}\n"
         "📍 Bizning manzil: Markaziy bino."
     )
     

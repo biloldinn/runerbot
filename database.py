@@ -1,79 +1,54 @@
-import motor.motor_asyncio
+import pymongo
 from datetime import datetime, timedelta
-import asyncio
+from bson.objectid import ObjectId
 from config import MONGODB_URI, DATABASE_NAME
 
-client = motor.motor_asyncio.AsyncIOMotorClient(MONGODB_URI)
+client = pymongo.MongoClient(MONGODB_URI)
 db = client[DATABASE_NAME]
 
-async def init_db():
-    """MongoDB indekslarini yaratish"""
-    # Unique indexes
-    await db.users.create_index("telegram_id", unique=True)
-    await db.orders.create_index("order_number", unique=True)
-    await db.admin_users.create_index("username", unique=True)
-    await db.worker_stats.create_index([("worker_id", 1), ("date", 1)], unique=True)
-    await db.locks.create_index("name", unique=True)
-
-async def check_and_lock_instance(instance_name="bot_main"):
-    """Boshqa bot ishlayotganini tekshiradi va lock qo'yadi"""
-    # 30 sekunddan oshgan locklarni ochilgan deb hisoblaymiz (dead lock prevention)
-    expiry_time = datetime.now() - timedelta(seconds=120)
-    
-    # Eskirgan lockni o'chirish
-    await db.locks.delete_many({"name": instance_name, "last_heartbeat": {"$lt": expiry_time}})
-    
-    try:
-        await db.locks.insert_one({
-            "name": instance_name,
-            "last_heartbeat": datetime.now(),
-            "started_at": datetime.now()
-        })
-        return True
-    except:
-        return False
-
-async def update_heartbeat(instance_name="bot_main"):
-    await db.locks.update_one(
-        {"name": instance_name},
-        {"$set": {"last_heartbeat": datetime.now()}}
-    )
-
-async def release_lock(instance_name="bot_main"):
-    await db.locks.delete_many({"name": instance_name})
-    
-    # Initialize default settings
-    if not await db.settings.find_one({"key": "contact_info"}):
-        await db.settings.insert_one({
-            "key": "contact_info",
-            "phone": "+998 90 123 45 67",
-            "address": "Turon o‘quv markazi",
-            "work_hours": "09:00 - 18:00",
-            "card_number": "",
-            "card_owner": ""
-        })
-
-async def get_settings():
-    return await db.settings.find_one({"key": "contact_info"})
-
-async def update_settings(data):
-    await db.settings.update_one({"key": "contact_info"}, {"$set": data}, upsert=True)
+def init_db():
+    """MongoDB indekslarini yaratish (Sync)"""
+    db.users.create_index("telegram_id", unique=True)
+    db.orders.create_index("order_number", unique=True)
+    db.admin_users.create_index("username", unique=True)
+    db.worker_stats.create_index([("worker_id", 1), ("date", 1)], unique=True)
     
     # Check if default admin exists
-    admin = await db.admin_users.find_one({"username": "admin"})
+    admin = db.admin_users.find_one({"username": "admin"})
     if not admin:
-        await db.admin_users.insert_one({
+        db.admin_users.insert_one({
             "username": "admin",
-            "password": "admin123", # Plain text as per original code
+            "password": "admin123",
             "role": "superadmin",
             "created_at": datetime.now()
         })
-    print("MongoDB tayyor!")
+    
+    # Check if settings exist
+    settings = db.settings.find_one({"type": "general"})
+    if not settings:
+        db.settings.insert_one({
+            "type": "general",
+            "phone": "+998 90 123 45 67",
+            "card_number": "8600 0000 0000 0000",
+            "card_owner": "TURON ADMIN",
+            "address": "Markaziy bino"
+        })
+
+# ============ SETTINGS FUNKSIYALARI ============
+
+def get_settings():
+    return db.settings.find_one({"type": "general"})
+
+def update_settings(new_settings):
+    db.settings.update_one(
+        {"type": "general"},
+        {"$set": new_settings}
+    )
 
 # ============ USER FUNKSIYALARI ============
 
-async def get_or_create_user(telegram_id, username=None, full_name=None):
-    user = await db.users.find_one({"telegram_id": telegram_id})
+def get_or_create_user(telegram_id, username=None, full_name=None):
+    user = db.users.find_one({"telegram_id": telegram_id})
     if not user:
         new_user = {
             "telegram_id": telegram_id,
@@ -81,97 +56,80 @@ async def get_or_create_user(telegram_id, username=None, full_name=None):
             "full_name": full_name,
             "phone": None,
             "role": "user",
+            "balance": 0,
+            "rating_sum": 0,
+            "rating_count": 0,
             "is_active": True,
             "created_at": datetime.now()
         }
-        await db.users.insert_one(new_user)
-        user = await db.users.find_one({"telegram_id": telegram_id})
+        db.users.insert_one(new_user)
+        user = db.users.find_one({"telegram_id": telegram_id})
     return user
 
-async def get_all_users():
-    return await db.users.find({}).to_list(length=None)
+def get_user_by_telegram_id(telegram_id):
+    return db.users.find_one({"telegram_id": telegram_id})
 
+def get_all_users_count():
+    return db.users.count_documents({})
 
-async def update_user_name(telegram_id, full_name):
-    await db.users.update_one(
-        {"telegram_id": telegram_id},
-        {"$set": {"full_name": full_name}}
-    )
-
-async def update_user_phone(telegram_id, phone):
-    await db.users.update_one(
-        {"telegram_id": telegram_id},
-        {"$set": {"phone": phone}}
-    )
-
-async def get_user_by_telegram_id(telegram_id):
-    return await db.users.find_one({"telegram_id": telegram_id})
-
-async def get_all_workers():
-    workers = await db.users.find({"role": "worker", "is_active": True}).to_list(length=None)
+def get_all_workers():
+    workers = list(db.users.find({"role": "worker", "is_active": True}))
+    for w in workers:
+        w['id'] = str(w['_id'])
     return workers
 
-async def add_worker(telegram_id, username, full_name, phone):
-    await db.users.update_one(
+def add_worker(telegram_id, username, full_name, phone):
+    db.users.update_one(
         {"telegram_id": telegram_id},
         {"$set": {
             "username": username,
             "full_name": full_name,
             "phone": phone,
             "role": "worker",
-            "is_active": True
+            "is_active": True,
+            "balance": 0
         }},
         upsert=True
     )
 
-async def remove_worker(telegram_id):
-    await db.users.update_one(
+def remove_worker(telegram_id):
+    db.users.update_one(
         {"telegram_id": telegram_id},
         {"$set": {"role": "user", "is_active": False}}
     )
 
-async def get_next_worker_round_robin():
-    """Eng kam buyurtma olgan faol hodimni qaytaradi"""
-    # Simple logic: Sort by total active orders
-    workers = await db.users.find({"role": "worker", "is_active": True}).to_list(length=None)
-    if not workers:
-        return None
-    
-    # Count active orders for each worker
-    worker_loads = []
-    for w in workers:
-        count = await db.orders.count_documents({
-            "worker_id": w["telegram_id"], # Link by telegram_id now for simplicity
-            "status": {"$nin": ["completed", "cancelled"]}
-        })
-        worker_loads.append({"worker": w, "count": count})
-    
-    # Sort by count
-    worker_loads.sort(key=lambda x: x["count"])
-    return worker_loads[0]["worker"]
+def update_worker_balance(worker_id, amount):
+    db.users.update_one(
+        {"telegram_id": worker_id},
+        {"$inc": {"balance": float(amount)}}
+    )
+
+def update_user_name(telegram_id, full_name):
+    db.users.update_one({"telegram_id": telegram_id}, {"$set": {"full_name": full_name}})
+
+def update_user_phone(telegram_id, phone):
+    db.users.update_one({"telegram_id": telegram_id}, {"$set": {"phone": phone}})
 
 # ============ SERVICE FUNKSIYALARI ============
 
-async def get_all_services(active_only=True):
+def get_all_services(active_only=True):
     query = {"is_active": True} if active_only else {}
-    services = await db.services.find(query).sort("created_at", 1).to_list(length=None)
-    # Convert _id to id string for frontend compatibility if needed, or just use as is
+    services = list(db.services.find(query).sort("created_at", 1))
     for s in services:
         s['id'] = str(s['_id'])
     return services
 
-async def get_service_by_id(service_id):
-    from bson.objectid import ObjectId
+def get_service_by_id(service_id):
     try:
-        service = await db.services.find_one({"_id": ObjectId(service_id)})
+        service = db.services.find_one({"_id": ObjectId(service_id)})
         if service:
             service['id'] = str(service['_id'])
         return service
     except:
         return None
 
-async def add_service(name, description, price, duration, category):
-    await db.services.insert_one({
+def add_service(name, description, price, duration, category):
+    db.services.insert_one({
         "name": name,
         "description": description,
         "price": float(price),
@@ -181,9 +139,8 @@ async def add_service(name, description, price, duration, category):
         "created_at": datetime.now()
     })
 
-async def update_service(service_id, name, description, price, duration, category, is_active):
-    from bson.objectid import ObjectId
-    await db.services.update_one(
+def update_service(service_id, name, description, price, duration, category, is_active):
+    db.services.update_one(
         {"_id": ObjectId(service_id)},
         {"$set": {
             "name": name,
@@ -195,236 +152,224 @@ async def update_service(service_id, name, description, price, duration, categor
         }}
     )
 
-async def delete_service(service_id):
-    from bson.objectid import ObjectId
-    await db.services.delete_one({"_id": ObjectId(service_id)})
+def delete_service(service_id):
+    db.services.delete_one({"_id": ObjectId(service_id)})
 
 # ============ ORDER FUNKSIYALARI ============
 
-def generate_order_number():
-    return f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-
-async def create_order(user_id, service_id, total_price, payment_method, comment=None, voice_note_url=None):
-    order_number = generate_order_number()
-    next_worker = await get_next_worker_round_robin()
-    worker_id = next_worker['telegram_id'] if next_worker else None # Store telegram_id
+def create_order(user_id, service_id, total_price, payment_method, comment=None, voice_note_url=None):
+    from random import choice
     
-    # Find service name
-    service = await get_service_by_id(service_id)
-    service_name = service['name'] if service else "Noma'lum"
+    # Generate unique order number
+    import random
+    order_number = f"T{random.randint(10000, 99999)}"
+    
+    user = get_user_by_telegram_id(user_id)
+    service = get_service_by_id(service_id)
+    service_name = service['name'] if service else "Boshqa xizmat"
 
-    # Find user info
-    user = await db.users.find_one({"telegram_id": user_id})
-    user_name = user['full_name'] if user else "Mijoz"
+    # Round-robin worker assignment (simplest: choose random active worker)
+    workers = get_all_workers()
+    assigned_worker = choice(workers) if workers else None
+    worker_id = assigned_worker['telegram_id'] if assigned_worker else None
 
-    new_order = {
+    order_doc = {
         "order_number": order_number,
         "user_id": user_id,
-        "user_name": user_name,
-        "worker_id": worker_id,
+        "user_name": user['full_name'],
+        "user_phone": user.get('phone'),
         "service_id": service_id,
         "service_name": service_name,
         "total_price": float(total_price),
         "payment_method": payment_method,
-        "payment_status": "at_location" if payment_method == "at_location" else "pending",
-        "status": "accepted" if worker_id else "new",
+        "payment_status": "pending" if payment_method == "receipt" else "at_location",
+        "status": "new",
         "comment": comment,
         "voice_note_url": voice_note_url,
-        "receipt_url": None,
+        "worker_id": worker_id,
+        "rating": None,
         "created_at": datetime.now(),
-        "accepted_at": datetime.now() if worker_id else None,
-        "completed_at": None
+        "completed_at": None,
+        "accepted_at": None
     }
     
-    result = await db.orders.insert_one(new_order)
-    new_order['id'] = str(result.inserted_id)
-    return new_order, next_worker
+    res = db.orders.insert_one(order_doc)
+    order_doc['id'] = str(res.inserted_id)
+    return order_doc, assigned_worker
 
-async def get_order_by_id(order_id):
-    from bson.objectid import ObjectId
+def get_order_by_id(order_id):
     try:
-        order = await db.orders.find_one({"_id": ObjectId(order_id)})
+        order = db.orders.find_one({"_id": ObjectId(order_id)})
         if order:
             order['id'] = str(order['_id'])
         return order
     except:
         return None
 
-async def get_orders_by_user(user_id):
-    orders = await db.orders.find({"user_id": user_id}).sort("created_at", -1).to_list(length=None)
+def get_all_orders():
+    orders = list(db.orders.find().sort("created_at", -1))
+    for o in orders:
+        o['id'] = str(o['_id'])
+        if o.get('worker_id'):
+            worker = db.users.find_one({"telegram_id": o['worker_id']})
+            o['worker_name'] = worker['full_name'] if worker else "Noma'lum"
+    return orders
+
+def get_orders_by_user(user_id):
+    orders = list(db.orders.find({"user_id": user_id}).sort("created_at", -1))
     for o in orders:
         o['id'] = str(o['_id'])
     return orders
 
-async def get_new_orders():
-    orders = await db.orders.find({
-        "status": "new", 
-        "payment_status": {"$in": ["confirmed", "at_location"]}
-    }).sort("created_at", 1).to_list(length=None)
-    for o in orders:
-        o['id'] = str(o['_id'])
-    return orders
-
-async def get_worker_orders(worker_id, status=None):
-    query = {"worker_id": worker_id}
-    if status:
-        query["status"] = status
-    orders = await db.orders.find(query).sort("created_at", -1).to_list(length=None)
-    for o in orders:
-        o['id'] = str(o['_id'])
-    return orders
-
-async def update_order_status(order_id, status, worker_id=None):
-    from bson.objectid import ObjectId
-    update_data = {"status": status}
-    if worker_id:
-        update_data["worker_id"] = worker_id
-        update_data["accepted_at"] = datetime.now()
-    if status == "completed":
-        update_data["completed_at"] = datetime.now()
-        
-    await db.orders.update_one(
-        {"_id": ObjectId(order_id)},
-        {"$set": update_data}
-    )
-
-async def update_order_payment_status(order_id, status, receipt_url=None):
-    from bson.objectid import ObjectId
+def update_order_payment_status(order_id, status, receipt_url=None):
     update_data = {"payment_status": status}
     if receipt_url:
         update_data["receipt_url"] = receipt_url
     
-    await db.orders.update_one(
+    order = get_order_by_id(order_id)
+    if not order: return
+    
+    db.orders.update_one(
         {"_id": ObjectId(order_id)},
         {"$set": update_data}
     )
+    
+    # If confirmed and has a worker, add to balance
+    if status == "confirmed" and order.get('worker_id'):
+        update_worker_balance(order['worker_id'], order['total_price'])
 
-async def assign_order_to_worker(order_id, worker_id):
-    from bson.objectid import ObjectId
-    await db.orders.update_one(
+def update_order_status(order_id, status):
+    update_data = {"status": status}
+    if status == "completed":
+        update_data["completed_at"] = datetime.now()
+    
+    order = get_order_by_id(order_id)
+    if not order: return
+
+    db.orders.update_one(
+        {"_id": ObjectId(order_id)},
+        {"$set": update_data}
+    )
+    
+    # If completed and payment_method is at_location, add to balance
+    if status == "completed" and order.get('payment_method') == "at_location" and order.get('worker_id'):
+        update_worker_balance(order['worker_id'], order['total_price'])
+
+def assign_order_to_worker(order_id, worker_id):
+    db.orders.update_one(
         {"_id": ObjectId(order_id)},
         {"$set": {"worker_id": worker_id, "status": "accepted", "accepted_at": datetime.now()}}
     )
 
-async def update_worker_stats(worker_id, amount):
-    today = datetime.now().strftime("%Y-%m-%d")
-    await db.worker_stats.update_one(
-        {"worker_id": worker_id, "date": today},
-        {"$inc": {"orders_count": 1, "total_amount": float(amount)}},
-        upsert=True
+def rate_order(order_id, rating):
+    order = get_order_by_id(order_id)
+    if not order or not order.get('worker_id'): return
+    
+    db.orders.update_one(
+        {"_id": ObjectId(order_id)},
+        {"$set": {"rating": int(rating)}}
+    )
+    
+    # Update worker's rating
+    db.users.update_one(
+        {"telegram_id": order['worker_id']},
+        {"$inc": {"rating_sum": int(rating), "rating_count": 1}}
     )
 
-async def get_worker_today_stats(worker_id):
-    today = datetime.now().strftime("%Y-%m-%d")
-    stats = await db.worker_stats.find_one({"worker_id": worker_id, "date": today})
-    if stats:
-        return stats
-    return {"orders_count": 0, "total_amount": 0}
+# ============ STATISTIKA ============
 
-async def get_worker_history(worker_id):
-    history = await db.worker_stats.find({"worker_id": worker_id}).sort("date", -1).limit(30).to_list(length=None)
-    return history
-
-# ============ ADMIN FUNKSIYALARI ============
-
-async def get_all_orders():
-    orders = await db.orders.find().sort("created_at", -1).to_list(length=None)
-    for o in orders:
-        o['id'] = str(o['_id'])
-        # Add worker_name
-        if o.get('worker_id'):
-            worker = await db.users.find_one({"telegram_id": o['worker_id']})
-            o['worker_name'] = worker['full_name'] if worker else "Noma'lum"
-    return orders
-
-async def get_statistics():
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    month_str = datetime.now().strftime("%Y-%m")
+def get_statistics():
+    now = datetime.now()
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
-    # Today
-    today_query = {"created_at": {"$gte": datetime.strptime(today_str, "%Y-%m-%d")}}
-    today_orders = await db.orders.count_documents(today_query)
+    today_orders = db.orders.count_documents({"created_at": {"$gte": today}})
     
-    # Today total amount (aggregation)
-    pipeline = [
-        {"$match": today_query},
+    # Today amount
+    today_res = list(db.orders.aggregate([
+        {"$match": {"created_at": {"$gte": today}, "status": {"$ne": "cancelled"}}},
         {"$group": {"_id": None, "total": {"$sum": "$total_price"}}}
-    ]
-    today_res = await db.orders.aggregate(pipeline).to_list(length=1)
+    ]))
     today_amount = today_res[0]['total'] if today_res else 0
 
-    # Pending and in progress
-    pending = await db.orders.count_documents({"payment_status": "pending"})
-    in_progress = await db.orders.count_documents({"status": {"$in": ["accepted", "in_progress"]}})
+    # Monthly amount
+    month_res = list(db.orders.aggregate([
+        {"$match": {"created_at": {"$gte": month_start}, "status": {"$ne": "cancelled"}}},
+        {"$group": {"_id": None, "total": {"$sum": "$total_price"}, "count": {"$sum": 1}}}
+    ]))
+    monthly_amount = month_res[0]['total'] if month_res else 0
+    monthly_orders = month_res[0]['count'] if month_res else 0
+
+    pending = db.orders.count_documents({"payment_status": "pending"})
+    in_progress = db.orders.count_documents({"status": {"$in": ["accepted", "in_progress"]}})
+    total_users = db.users.count_documents({})
 
     return {
         "today_orders": today_orders,
         "today_amount": today_amount,
-        "monthly_orders": 0, # Simplified for now
-        "monthly_amount": 0,
+        "monthly_orders": monthly_orders,
+        "monthly_amount": monthly_amount,
         "pending_payments": pending,
-        "in_progress_orders": in_progress
+        "in_progress_orders": in_progress,
+        "total_start_users": total_users
     }
 
-async def get_workers_ranking():
-    # Group by worker_id in orders or worker_stats
-    pipeline = [
-        {"$group": {
-            "_id": "$worker_id", 
-            "total_orders": {"$sum": 1},
-            "total_amount": {"$sum": "$total_price"}
-        }},
-        {"$sort": {"total_amount": -1}}
-    ]
-    results = await db.orders.aggregate(pipeline).to_list(length=None)
-    
+def get_workers_ranking():
+    # Use users collection for stats to include balance and average rating
+    workers = list(db.users.find({"role": "worker"}))
     ranking = []
-    for res in results:
-        if res['_id']:
-            worker = await db.users.find_one({"telegram_id": res['_id']})
-            if worker:
-                ranking.append({
-                    "full_name": worker['full_name'],
-                    "total_orders": res['total_orders'],
-                    "total_amount": res['total_amount'],
-                    "phone": worker.get('phone', '')
-                })
+    
+    for w in workers:
+        # Get count of completed orders
+        completed_count = db.orders.count_documents({"worker_id": w['telegram_id'], "status": "completed"})
+        
+        avg_rating = 0
+        if w.get('rating_count', 0) > 0:
+            avg_rating = round(w['rating_sum'] / w['rating_count'], 1)
+            
+        ranking.append({
+            "full_name": w['full_name'],
+            "telegram_id": w['telegram_id'],
+            "total_orders": completed_count,
+            "total_amount": w.get('balance', 0), # Balance is their earned amount
+            "rating": avg_rating,
+            "rating_count": w.get('rating_count', 0),
+            "phone": w.get('phone', ''),
+            "is_active": w.get('is_active', True)
+        })
+    
+    # Sort by balance descending
+    ranking.sort(key=lambda x: x['total_amount'], reverse=True)
     return ranking
 
-async def check_admin_user(username, password):
-    user = await db.admin_users.find_one({"username": username, "password": password})
-    return user is not None
+def get_admin_user(username, password):
+    return db.admin_users.find_one({"username": username, "password": password})
 
-async def get_admin_user(username, password):
-    return await db.admin_users.find_one({"username": username, "password": password})
-
-async def get_admin_by_id(user_id):
-    from bson.objectid import ObjectId
+def get_admin_by_id(user_id):
     try:
-        return await db.admin_users.find_one({"_id": ObjectId(user_id)})
+        return db.admin_users.find_one({"_id": ObjectId(user_id)})
     except:
         return None
 
 # ============ YANGILIKLAR VA E'LONLAR ============
 
-async def get_all_news(limit=10):
-    news = await db.news.find().sort("created_at", -1).limit(limit).to_list(length=limit)
+def get_all_news(limit=10):
+    news = list(db.news.find().sort("created_at", -1).limit(limit))
     for item in news:
         item['id'] = str(item['_id'])
     return news
 
-async def add_news(title, content, author="Admin"):
-    return await db.news.insert_one({
+def add_news(title, content, author="Admin"):
+    return db.news.insert_one({
         "title": title,
         "content": content,
         "author": author,
         "created_at": datetime.now()
     })
 
-async def delete_news(news_id):
-    from bson.objectid import ObjectId
+def delete_news(news_id):
     try:
-        await db.news.delete_one({"_id": ObjectId(news_id)})
+        db.news.delete_one({"_id": ObjectId(news_id)})
         return True
     except:
         return False
