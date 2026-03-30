@@ -27,7 +27,7 @@ async def show_services(message: Message):
 @router.callback_query(F.data.startswith("service_"))
 async def service_detail(callback: CallbackQuery):
     service_id = callback.data.split("_")[1]
-    service = await get_service_by_id(service_id)
+    service = get_service_by_id(service_id)
     
     if not service:
         await callback.answer("Xizmat topilmadi!")

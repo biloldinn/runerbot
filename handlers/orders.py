@@ -179,9 +179,9 @@ async def process_pickup(message: Message, state: FSMContext):
 @router.callback_query(F.data == "pay_at_location", OrderState.waiting_for_payment_method)
 async def pay_at_location_final(callback: CallbackQuery, state: FSMContext, bot: Bot):
     data = await state.get_data()
-    user = await get_user_by_telegram_id(callback.from_user.id)
+    user = get_user_by_telegram_id(callback.from_user.id)
     
-    order, worker = await create_order(
+    order, worker = create_order(
         user_id=user['telegram_id'],
         service_id=data.get('service_id'),
         total_price=data.get('service_price'),
@@ -189,7 +189,7 @@ async def pay_at_location_final(callback: CallbackQuery, state: FSMContext, bot:
         comment=data.get('comment'),
         voice_note_url=data.get('voice_note_url'),
         photos=data.get('photos'),
-        pickup_day=data.get('pickup_info') # Temporary simplified
+        pickup_day=data.get('pickup_info')
     )
     
     worker_text = f"\n👨‍💻 Hodim: {worker['full_name']}" if worker else ""

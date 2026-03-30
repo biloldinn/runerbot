@@ -16,7 +16,7 @@ class RegisterState(StatesGroup):
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
-    user = await get_or_create_user(
+    user = get_or_create_user(
         telegram_id=message.from_user.id,
         username=message.from_user.username,
         full_name=message.from_user.full_name
@@ -95,7 +95,7 @@ async def get_phone(message: Message, state: FSMContext):
 # ...
 @router.message(F.text == "📞 Aloqa")
 async def contact_info(message: Message):
-    settings = await get_settings()
+    settings = get_settings()
     text = (
         "<b>📞 Aloqa ma'lumotlari</b>\n\n"
         f"📍 Manzil: {settings.get('address')}\n"

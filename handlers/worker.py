@@ -111,16 +111,16 @@ async def worker_in_progress(message: Message):
 @router.callback_query(F.data.startswith("worker_complete_"))
 async def worker_complete_order(callback: CallbackQuery, bot: Bot):
     order_id = callback.data.split("_")[2]
-    worker = await get_user_by_telegram_id(callback.from_user.id)
-    order = await get_order_by_id(order_id)
+    worker = get_user_by_telegram_id(callback.from_user.id)
+    order = get_order_by_id(order_id)
     
     if not order:
         await callback.answer("Buyurtma topilmadi!")
         return
     
     # Buyurtmani bajarilgan deb belgilash
-    await update_order_status(order_id, "completed")
-    await update_worker_stats(worker['telegram_id'], order['total_price'])
+    update_order_status(order_id, "completed")
+    update_worker_stats(worker['telegram_id'], order['total_price'])
     
     # Foydalanuvchiga so'rov yuborish
     from handlers.orders import OrderState

@@ -228,7 +228,7 @@ async def process_card_num(message: Message, state: FSMContext):
 @router.message(AdminStates.waiting_settings_card_owner)
 async def process_card_own(message: Message, state: FSMContext):
     data = await state.get_data()
-    await update_settings({
+    update_settings({
         "card_number": data['card_number'],
         "card_owner": message.text
     })
