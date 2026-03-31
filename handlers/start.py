@@ -50,7 +50,7 @@ async def cmd_start(message: Message, state: FSMContext):
 
 @router.message(RegisterState.waiting_for_name)
 async def process_name(message: Message, state: FSMContext):
-    await update_user_name(message.from_user.id, message.text)
+    update_user_name(message.from_user.id, message.text)
     
     keyboard = ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="📱 Telefon raqamni yuborish", request_contact=True)]],
@@ -66,14 +66,14 @@ async def process_name(message: Message, state: FSMContext):
 @router.message(RegisterState.waiting_for_phone, F.contact)
 async def get_phone(message: Message, state: FSMContext):
     phone = message.contact.phone_number
-    await update_user_phone(message.from_user.id, phone)
+    update_user_phone(message.from_user.id, phone)
     
     await message.answer(
         "✅ Telefon raqam qabul qilindi!",
         reply_markup=ReplyKeyboardRemove()
     )
     
-    user = await get_user_by_telegram_id(message.from_user.id)
+    user = get_user_by_telegram_id(message.from_user.id)
     is_admin = message.from_user.id in ADMIN_IDS
     
     if user.get('role') == 'worker':
