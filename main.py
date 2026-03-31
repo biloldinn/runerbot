@@ -65,8 +65,13 @@ async def main():
     from database import init_db
     await init_db()
     
-    # FORCED OVERRIDE: Disabled for token migration
-    logging.info("Multi-instance lock bypassed for migration.")
+    import uuid
+    instance_id = str(uuid.uuid4())
+    is_locked = await check_and_lock_instance(instance_id)
+    
+    if not is_locked:
+        logging.error("Another bot instance is already running. Exiting...")
+        return
 
     logging.info("Bot started successfully (Polling mode active)")
     

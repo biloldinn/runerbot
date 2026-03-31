@@ -306,10 +306,40 @@ def get_worker_history(worker_id, days=30):
 # ============ CONFLICT PREVENTION ============
 
 async def check_and_lock_instance(instance_id="local"):
+    """
+    Check if another instance is running and lock the current instance
+    """
+    lock = db.system_locks.find_one({"_id": "bot_instance"})
+    now = datetime.now()
+    
+    if lock:
+        last_heartbeat = lock.get("last_heartbeat")
+        if last_heartbeat and (now - last_heartbeat).total_seconds() < 120:
+            if lock.get("instance_id") != instance_id:
+                return False
+                
+    db.system_locks.update_one(
+        {"_id": "bot_instance"},
+        {"$set": {
+            "instance_id": instance_id,
+            "last_heartbeat": now,
+            "startup_time": now
+        }},
+        upsert=True
+    )
     return True
 
 async def update_heartbeat():
-    pass
+    try:
+        db.system_locks.update_one(
+            {"_id": "bot_instance"},
+            {"$set": {"last_heartbeat": datetime.now()}}
+        )
+    except:
+        pass
 
 async def release_lock():
-    pass
+    try:
+        db.system_locks.delete_one({"_id": "bot_instance"})
+    except:
+        pass
