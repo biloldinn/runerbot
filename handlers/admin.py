@@ -48,7 +48,7 @@ async def admin_main(message: Message):
 @router.callback_query(F.data == "admin_workers_list")
 async def admin_workers_list(callback: CallbackQuery):
     from database import get_all_workers
-    workers = await get_all_workers()
+    workers = get_all_workers()
     
     if not workers:
         await callback.answer("Hozircha xodimlar yo'q.")
@@ -69,7 +69,7 @@ async def admin_workers_list(callback: CallbackQuery):
 async def delete_worker_handler(callback: CallbackQuery):
     from database import remove_worker
     worker_id = int(callback.data.split("_")[2])
-    await remove_worker(worker_id)
+    remove_worker(worker_id)
     await callback.answer("✅ Xodim o'chirildi!", show_alert=True)
     await admin_workers_list(callback) # Ro'yxatni yangilash
 
@@ -141,7 +141,7 @@ async def process_service_price(message: Message, state: FSMContext):
 async def process_service_desc(message: Message, state: FSMContext):
     data = await state.get_data()
     from database import add_service
-    await add_service(data['s_name'], message.text, data['s_price'], 60, "Umumiy")
+    add_service(data['s_name'], message.text, data['s_price'], 60, "Umumiy")
     await message.answer(f"✅ Xizmat qo'shildi: <b>{data['s_name']}</b>\n💰 Narxi: {data['s_price']:,} so'm", parse_mode="HTML")
     await state.clear()
 
@@ -159,7 +159,7 @@ async def admin_settings(callback: CallbackQuery, state: FSMContext):
 @router.message(AdminStates.waiting_settings_phone)
 async def process_settings_phone(message: Message, state: FSMContext):
     new_phone = message.text
-    await update_settings({"phone": new_phone})
+    update_settings({"phone": new_phone})
     await message.answer(f"✅ Kontakt telefon raqami muvaffaqiyatli saqlandi: {new_phone}")
     await state.clear()
 @router.message(F.text.startswith("/check_"))
@@ -169,7 +169,7 @@ async def check_order_receipt(message: Message, bot: Bot):
         order_id = message.text.split("_")[1]
     except: return
         
-    order = await get_order_by_id(order_id)
+    order = get_order_by_id(order_id)
     if not order or not order['receipt_url']:
         await message.answer("❌ Chek topilmadi!")
         return
@@ -185,8 +185,8 @@ async def check_order_receipt(message: Message, bot: Bot):
 @router.callback_query(F.data.startswith("confirm_pay_"))
 async def confirm_payment(callback: CallbackQuery, bot: Bot):
     order_id = callback.data.split("_")[2]
-    order = await get_order_by_id(order_id)
-    await update_order_payment_status(order_id, "confirmed")
+    order = get_order_by_id(order_id)
+    update_order_payment_status(order_id, "confirmed")
     try:
         await bot.send_message(order['user_id'], f"✅ <b>To'lovingiz tasdiqlandi!</b> #{order['order_number']}", parse_mode="HTML")
     except: pass
@@ -195,8 +195,8 @@ async def confirm_payment(callback: CallbackQuery, bot: Bot):
 @router.callback_query(F.data.startswith("cancel_pay_"))
 async def cancel_payment(callback: CallbackQuery, bot: Bot):
     order_id = callback.data.split("_")[2]
-    order = await get_order_by_id(order_id)
-    await update_order_payment_status(order_id, "cancelled")
+    order = get_order_by_id(order_id)
+    update_order_payment_status(order_id, "cancelled")
     try:
         await bot.send_message(order['user_id'], f"❌ <b>To'lovingiz bekor qilindi.</b>")
     except: pass
@@ -205,7 +205,7 @@ async def cancel_payment(callback: CallbackQuery, bot: Bot):
 @router.callback_query(F.data == "admin_orders")
 async def admin_orders_list(callback: CallbackQuery):
     from database import get_all_orders
-    orders = await get_all_orders()
+    orders = get_all_orders()
     
     if not orders:
         await callback.answer("Hozircha buyurtmalar yo'q.")
@@ -244,7 +244,7 @@ async def process_card_own(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("play_voice_"))
 async def play_voice_handler(callback: CallbackQuery, bot: Bot):
     order_id = callback.data.split("_")[2]
-    order = await get_order_by_id(order_id)
+    order = get_order_by_id(order_id)
     if order and order['voice_note_url']:
         from aiogram.types import FSInputFile
         await callback.message.answer_voice(FSInputFile(order['voice_note_url']), caption=f"🎤 #{order['order_number']} ovozli izohi")
@@ -255,7 +255,7 @@ async def play_voice_handler(callback: CallbackQuery, bot: Bot):
 @router.callback_query(F.data.startswith("check_receipt_"))
 async def check_receipt_handler(callback: CallbackQuery, bot: Bot):
     order_id = callback.data.split("_")[2]
-    order = await get_order_by_id(order_id)
+    order = get_order_by_id(order_id)
     if order and order['receipt_url']:
         from aiogram.types import FSInputFile
         text = f"📝 <b>Buyurtma #{order['order_number']}</b>\n👤 Mijoz: {order['user_name']}\n💰 Summa: {order['total_price']:,} so'm"
