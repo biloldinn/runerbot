@@ -86,7 +86,7 @@ async def start_add_worker(callback: CallbackQuery, state: FSMContext):
 async def process_worker_username(message: Message, state: FSMContext):
     from database import find_user_by_username
     username = message.text.replace("@", "")
-    user = await find_user_by_username(username)
+    user = find_user_by_username(username)
     
     if not user:
         await message.answer("❌ Bu username bilan foydalanuvchi topilmadi!\n\nAvval xodim botga kirib /start bosishi kerak.")
@@ -105,7 +105,7 @@ async def process_worker_name(message: Message, state: FSMContext):
 @router.message(AdminStates.waiting_worker_phone)
 async def process_worker_phone(message: Message, state: FSMContext):
     data = await state.get_data()
-    await add_worker(data['worker_id'], data.get('worker_username'), data['worker_name'], message.text)
+    add_worker(data['worker_id'], data.get('worker_username'), data['worker_name'], message.text)
     await message.answer(f"✅ Xodim muvaffaqiyatli qo'shildi: <b>{data['worker_name']}</b>", parse_mode="HTML")
     await state.clear()
 
