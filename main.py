@@ -94,10 +94,40 @@ async def main():
         # Set commands
         await set_commands(bot)
         
-        # Start polling
-        logging.info("--- TURON BOT STARTED ---")
-        await bot.delete_webhook(drop_pending_updates=True)
-        await dp.start_polling(bot)
+        if os.getenv("RENDER_EXTERNAL_URL") or os.getenv("WEBHOOK_URL"):
+            webhook_url = os.getenv("RENDER_EXTERNAL_URL") or os.getenv("WEBHOOK_URL")
+            logging.info(f"--- STARTING WEBHOOK OND {webhook_url} ---")
+            
+            from aiohttp import web
+            from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+            
+            await bot.set_webhook(f"{webhook_url}/webhook", drop_pending_updates=True)
+            
+            app = web.Application()
+            webhook_requests_handler = SimpleRequestHandler(dispatcher=dp, bot=bot)
+            webhook_requests_handler.register(app, path="/webhook")
+            setup_application(app, dp, bot=bot)
+            
+            # Additional dummy health check for Render
+            async def health_check(request):
+                return web.Response(text="Bot is running!")
+            app.router.add_get("/", health_check)
+
+            runner = web.AppRunner(app)
+            await runner.setup()
+            port = int(os.getenv("PORT", 10000))
+            site = web.TCPSite(runner, host="0.0.0.0", port=port)
+            await site.start()
+            
+            # Keep running
+            while True:
+                await asyncio.sleep(3600)
+                
+        else:
+            logging.info("--- TURON BOT STARTED (POLLING) ---")
+            await bot.delete_webhook(drop_pending_updates=True)
+            await dp.start_polling(bot)
+            
     finally:
         await release_lock()
         logging.info("--- TURON BOT STOPPED ---")
