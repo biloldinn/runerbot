@@ -3,7 +3,11 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from database import get_order_by_id, update_order_payment_status, add_worker, add_service, get_all_services, update_settings
+from database import (
+    get_order_by_id, update_order_payment_status, add_worker, add_service, 
+    get_all_services, update_settings, find_user_by_username, get_all_workers, 
+    remove_worker, get_all_orders
+)
 from config import ADMIN_IDS
 WEBAPP_URL = "https://turon-zakas.vercel.app"
 
@@ -84,17 +88,19 @@ async def start_add_worker(callback: CallbackQuery, state: FSMContext):
 
 @router.message(AdminStates.waiting_worker_username)
 async def process_worker_username(message: Message, state: FSMContext):
-    from database import find_user_by_username
-    username = message.text.replace("@", "")
-    user = find_user_by_username(username)
-    
-    if not user:
-        await message.answer("❌ Bu username bilan foydalanuvchi topilmadi!\n\nAvval xodim botga kirib /start bosishi kerak.")
-        return
+    try:
+        username = message.text.replace("@", "")
+        user = find_user_by_username(username)
         
-    await state.update_data(worker_id=user['telegram_id'], worker_username=user.get('username'))
-    await message.answer(f"✅ Foydalanuvchi topildi: <b>{user['full_name']}</b>\n\n➡️ Endi xodimning <b>familiyasi va ismini</b> kiriting:", parse_mode="HTML")
-    await state.set_state(AdminStates.waiting_worker_name)
+        if not user:
+            await message.answer("❌ Bu username bilan foydalanuvchi topilmadi!\n\nAvval xodim botga kirib /start bosishi kerak.")
+            return
+            
+        await state.update_data(worker_id=user['telegram_id'], worker_username=user.get('username'))
+        await message.answer(f"✅ Foydalanuvchi topildi: <b>{user['full_name']}</b>\n\n➡️ Endi xodimning <b>familiyasi va ismini</b> kiriting:", parse_mode="HTML")
+        await state.set_state(AdminStates.waiting_worker_name)
+    except Exception as e:
+        await message.answer(f"⚠️ Xatolik: {e}")
 
 @router.message(AdminStates.waiting_worker_name)
 async def process_worker_name(message: Message, state: FSMContext):
