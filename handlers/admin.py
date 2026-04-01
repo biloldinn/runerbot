@@ -109,9 +109,21 @@ async def process_worker_name(message: Message, state: FSMContext):
     await state.set_state(AdminStates.waiting_worker_phone)
 
 @router.message(AdminStates.waiting_worker_phone)
-async def process_worker_phone(message: Message, state: FSMContext):
+async def process_worker_phone(message: Message, state: FSMContext, bot: Bot):
     data = await state.get_data()
     add_worker(data['worker_id'], data.get('worker_username'), data['worker_name'], message.text)
+    
+    # Notify Worker
+    try:
+        worker_text = (
+            "👨‍💻 <b>Tabriklaymiz!</b>\n\n"
+            "Siz Turon buyurtma botida <b>xodim</b> bo'lib ro'yxatdan o'tdingiz.\n"
+            "Endi buyurtmalar kelishini kuting! Buyurtmalar shu yerda ko'rinadi."
+        )
+        await bot.send_message(data['worker_id'], worker_text, parse_mode="HTML")
+    except:
+        pass # If we can't send, we just proceed
+        
     await message.answer(f"✅ Xodim muvaffaqiyatli qo'shildi: <b>{data['worker_name']}</b>", parse_mode="HTML")
     await state.clear()
 
